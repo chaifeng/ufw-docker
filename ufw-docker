@@ -62,6 +62,9 @@ function ufw-docker--allow() {
             done
         fi
     done
+    if [[ "$RETVAL" -ne 0 ]]; then
+        err "Fail to add rule(s), cannot find the published port ${INSTANCE_PORT}/${PROTO} of instance \"${INSTANCE_NAME}\" or cannot update outdated rule(s)."
+    fi
     return "$RETVAL"
 }
 
@@ -71,7 +74,7 @@ function ufw-docker--add-rule() {
     local PORT="$3"
     local PROTO="$4"
 
-    echo "allow $INSTANCE_NAME $PORT $PROTO"
+    echo "allow ${INSTANCE_NAME} ${PORT}/${PROTO}"
     typeset -a UFW_OPTS
     UFW_OPTS=(route allow proto "${PROTO}"
               from any to "$INSTANCE_IP_ADDRESS" port "${PORT}"
@@ -103,8 +106,8 @@ function ufw-docker--install() {
 		cat <<-\EOF | tee -a /etc/ufw/after.rules
 		# BEGIN UFW AND DOCKER
 		*filter
-		:DOCKER-USER - [0:0]
 		:ufw-user-forward - [0:0]
+		:DOCKER-USER - [0:0]
 		-A DOCKER-USER -j RETURN -s 10.0.0.0/8
 		-A DOCKER-USER -j RETURN -s 172.16.0.0/12
 		-A DOCKER-USER -j RETURN -s 192.168.0.0/16

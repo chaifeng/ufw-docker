@@ -1,8 +1,8 @@
 To Fix The Docker and UFW Security Flaw Without Disabling Iptables
 ==================
 
-[English](#tldr)
-[中文](#太长不想读)
+- [English](#tldr)
+- [中文](#太长不想读)
 
 ## TL;DR
 
@@ -131,7 +131,7 @@ The following rules block connection requests initiated by all public networks, 
 
 ## 太长不想读
 
-请直接看[解决 UFW 和 Docker 的问题](#解决-UFW-和-Docker-的问题)。
+请直接看[解决 UFW 和 Docker 的问题](#解决-ufw-和-docker-的问题)。
 
 ## 问题
 

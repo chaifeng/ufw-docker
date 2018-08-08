@@ -98,12 +98,13 @@ function ufw-docker--instance-name() {
 
 function ufw-docker--install() {
 	if ! grep "^# BEGIN UFW AND DOCKER\$" /etc/ufw/after.rules &>/dev/null; then
-    err "Back up /etc/ufw/after.rules"
+		err "Back up /etc/ufw/after.rules"
 		cp /etc/ufw/after.rules /etc/ufw/after.rules-ufw-docker~"$(date '+%Y-%m-%d-%H%M%S').bak"
 		cat <<-\EOF | tee -a /etc/ufw/after.rules
 		# BEGIN UFW AND DOCKER
 		*filter
 		:DOCKER-USER - [0:0]
+		:ufw-user-forward - [0:0]
 		-A DOCKER-USER -j RETURN -s 10.0.0.0/8
 		-A DOCKER-USER -j RETURN -s 172.16.0.0/12
 		-A DOCKER-USER -j RETURN -s 192.168.0.0/16
@@ -121,8 +122,8 @@ function ufw-docker--install() {
 		COMMIT
 		# END UFW AND DOCKER
 		EOF
-    err "Please restart UFW service manually."
-  fi
+		err "Please restart UFW service manually."
+	fi
 }
 
 function ufw-docker--help() {

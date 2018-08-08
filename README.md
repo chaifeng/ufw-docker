@@ -66,6 +66,7 @@ Modify the UFW configuration file `/etc/ufw/after.rules` and add the following r
 
     # BEGIN UFW AND DOCKER
     *filter
+    :ufw-user-forward - [0:0]
     :DOCKER-USER - [0:0]
     -A DOCKER-USER -j RETURN -s 10.0.0.0/8
     -A DOCKER-USER -j RETURN -s 172.16.0.0/12
@@ -189,6 +190,7 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 
     # BEGIN UFW AND DOCKER
     *filter
+    :ufw-user-forward - [0:0]
     :DOCKER-USER - [0:0]
     -A DOCKER-USER -j RETURN -s 10.0.0.0/8
     -A DOCKER-USER -j RETURN -s 172.16.0.0/12

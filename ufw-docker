@@ -1,0 +1,188 @@
+#!/bin/bash
+set -euo pipefail
+[[ -n "${DEBUG:-}" ]] && set -x
+
+PATH="/bin:/usr/bin:/sbin:/usr/sbin"
+
+UFW_ACTION="${1:-help}"
+
+GREP_REGEXP_INSTANCE_NAME="[-_[:alnum:]]\\+"
+DEFAULT_PROTO=tcp
+
+function ufw-docker--status() {
+    ufw-docker--list "$GREP_REGEXP_INSTANCE_NAME"
+}
+
+function ufw-docker--list() {
+    local INSTANCE_NAME="$1"
+    local INSTANCE_PORT="${2:-}"
+    local PROTO="${3:-${DEFAULT_PROTO}}"
+
+    if [[ -z "$INSTANCE_PORT" ]]; then
+        INSTANCE_PORT="[[:digit:]]\\+"
+        PROTO="\\(tcp\\|udp\\)"
+    fi
+    ufw status numbered | grep "# allow ${INSTANCE_NAME} ${INSTANCE_PORT}\\/${PROTO}\$"
+}
+
+function ufw-docker--list-number() {
+    ufw-docker--list "$@" | sed -e 's/^\[[[:blank:]]*\([[:digit:]]\+\)\].*/\1/'
+}
+
+function ufw-docker--delete() {
+    for UFW_NUMBER in $(ufw-docker--list-number "$@" | sort -rn); do
+        echo "delete \"$UFW_NUMBER\""
+        echo y | ufw delete "$UFW_NUMBER" || true
+    done
+}
+
+function ufw-docker--allow() {
+    local INSTANCE_NAME="$1"
+    local INSTANCE_PORT="$2"
+    local PROTO="$3"
+
+    docker inspect "$INSTANCE_NAME" &>/dev/null ||
+        die "Docker instance \"$INSTANCE_NAME\" doesn't exist."
+
+    mapfile -t INSTANCE_IP_ADDRESSES < <(docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{"\n"}}{{end}}' "$INSTANCE_NAME" | remove_blank_lines)
+
+    mapfile -t PORT_PROTO_LIST < <(docker inspect --format='{{range $p, $conf := .NetworkSettings.Ports}}{{with $conf}}{{$p}}{{"\n"}}{{end}}{{end}}' "$INSTANCE_NAME" | remove_blank_lines)
+
+    if [[ -z "${PORT_PROTO_LIST[@]:-}" ]]; then
+        err "\"$INSTANCE_NAME\" doesn't have any published ports."
+        return 1
+    fi
+
+    RETVAL=1
+    for PORT_PROTO in "${PORT_PROTO_LIST[@]}"; do
+        if [[ -z "$INSTANCE_PORT" || "$PORT_PROTO" = "${INSTANCE_PORT}/${PROTO}" ]]; then
+            for IP in "${INSTANCE_IP_ADDRESSES[@]}"; do
+                ufw-docker--add-rule "$INSTANCE_NAME" "$IP" "${PORT_PROTO%/*}" "${PORT_PROTO#*/}"
+                RETVAL="$?"
+            done
+        fi
+    done
+    return "$RETVAL"
+}
+
+function ufw-docker--add-rule() {
+    local INSTANCE_NAME="$1"
+    local INSTANCE_IP_ADDRESS="$2"
+    local PORT="$3"
+    local PROTO="$4"
+
+    echo "allow $INSTANCE_NAME $PORT $PROTO"
+    typeset -a UFW_OPTS
+    UFW_OPTS=(route allow proto "${PROTO}"
+              from any to "$INSTANCE_IP_ADDRESS" port "${PORT}"
+              comment "allow ${INSTANCE_NAME} ${PORT}/${PROTO}")
+
+    if ufw-docker--list "$INSTANCE_NAME" "$PORT" "$PROTO" &>/dev/null; then
+        ufw --dry-run "${UFW_OPTS[@]}" | grep "^Skipping" && return 0
+        err "Remove outdated rule."
+        ufw-docker--delete "$INSTANCE_NAME" "$PORT" "$PROTO"
+    fi
+    echo " ${UFW_OPTS[@]}"
+    ufw "${UFW_OPTS[@]}"
+}
+
+function ufw-docker--instance-name() {
+    local INSTANCE_ID="$1"
+    {
+        {
+            echo -n "$INSTANCE_ID" | grep "^${GREP_REGEXP_INSTANCE_NAME}\$" &>/dev/null &&
+                docker inspect --format='{{.Name}}' "$INSTANCE_ID" 2>/dev/null | sed -e 's,^/,,';
+        } || echo -n "$INSTANCE_ID";
+    } | remove_blank_lines
+}
+
+function ufw-docker--install() {
+	if ! grep "^# BEGIN UFW AND DOCKER\$" /etc/ufw/after.rules &>/dev/null; then
+    err "Back up /etc/ufw/after.rules"
+		cp /etc/ufw/after.rules /etc/ufw/after.rules-ufw-docker~"$(date '+%Y-%m-%d-%H%M%S').bak"
+		cat <<-\EOF | tee -a /etc/ufw/after.rules
+		# BEGIN UFW AND DOCKER
+		*filter
+		:DOCKER-USER - [0:0]
+		-A DOCKER-USER -j RETURN -s 10.0.0.0/8
+		-A DOCKER-USER -j RETURN -s 172.16.0.0/12
+		-A DOCKER-USER -j RETURN -s 192.168.0.0/16
+
+		-A DOCKER-USER -j ufw-user-forward
+
+		-A DOCKER-USER -j DROP -d 192.168.0.0/16 -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN
+		-A DOCKER-USER -j DROP -d 10.0.0.0/8 -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN
+		-A DOCKER-USER -j DROP -d 172.16.0.0/12 -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN
+		-A DOCKER-USER -j DROP -d 192.168.0.0/16 -p udp -m udp --dport 0:32767
+		-A DOCKER-USER -j DROP -d 10.0.0.0/8 -p udp -m udp --dport 0:32767
+		-A DOCKER-USER -j DROP -d 172.16.0.0/12 -p udp -m udp --dport 0:32767
+
+		-A DOCKER-USER -j RETURN
+		COMMIT
+		# END UFW AND DOCKER
+		EOF
+    err "Please restart UFW service manually."
+  fi
+}
+
+function ufw-docker--help() {
+	cat <<-EOF >&2
+	Usage:
+	  ufw-docker <list|allow> [docker-instance-id-or-name] [port[/tcp|/udp]]
+	  ufw-docker delete allow [docker-instance-id-or-name] [port[/tcp|/udp]]
+	  ufw-docker <status|install|help>
+	EOF
+}
+
+function remove_blank_lines() {
+    sed '/^[[:blank:]]*$/d'
+}
+
+function err() {
+    echo "$@" >&2
+}
+
+function die() {
+    err "Fatal:" "$@"
+    exit 1
+}
+
+case "$UFW_ACTION" in
+    delete)
+        shift || true
+        if [[ "${1:?Invalid 'delete' command syntax.}" != "allow" ]]; then
+            die "\"delete\" command only support removing allowed rules"
+        fi
+        ;&
+    list|allow)
+        shift || true
+
+        if ! ufw status | grep -F "Status: active" &>/dev/null; then
+            die "UFW is not actived or your are not root user."
+        fi
+
+        INSTANCE_ID="${1:?Docker instance name/ID cannot be empty.}"
+        INSTANCE_NAME="$(ufw-docker--instance-name "$INSTANCE_ID")"
+        shift || true
+
+        INSTANCE_PORT="${1:-}"
+        if [[ -n "$INSTANCE_PORT" && ! "$INSTANCE_PORT" =~ [0-9]+(/(tcp|udp))? ]]; then
+            die "invalid port syntax: \"$INSTANCE_PORT\"."
+        fi
+
+        PROTO="$DEFAULT_PROTO"
+        if [[ "$INSTANCE_PORT" = */udp ]]; then
+            PROTO=udp
+        fi
+
+        INSTANCE_PORT="${INSTANCE_PORT%/*}"
+
+        "ufw-docker--$UFW_ACTION" "$INSTANCE_NAME" "$INSTANCE_PORT" "$PROTO"
+        ;;
+    status|install)
+        ufw-docker--"$UFW_ACTION"
+        ;;
+    *)
+        ufw-docker--help
+        ;;
+esac

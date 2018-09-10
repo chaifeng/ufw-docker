@@ -34,7 +34,7 @@ Searching for "ufw docker" on the web can find a lot of discussion:
 - https://blog.36web.rocks/2016/07/08/docker-behind-ufw.html
 - ...
 
-Almost all of these solutions are similar. It requires to disable docker's iptables function first, but this also means that we give up docker's network management function. This causes containers will not be able to access the external network. It is also mentioned in some articles that you can manually add some rules in the UFW configuration file, such as `-A POSTROUTING ! -o docker0 -s 172.17.0.0/16 -j MASQUERADE`. But this only allows containers that belong to network 172.17.0.0/16 can access outside. If we create a new docker network, we must manually add such similar iptables rules for the new network.
+Almost all of these solutions are similar. It requires to disable docker's iptables function first, but this also means that we give up docker's network management function. This causes containers will not be able to access the external network. It is also mentioned in some articles that you can manually add some rules in the UFW configuration file, such as `-A POSTROUTING ! -o docker0 -s 172.17.0.0/16 -j MASQUERADE`. But this only allows containers that belong to network `172.17.0.0/16` can access outside. If we create a new docker network, we must manually add such similar iptables rules for the new network.
 
 ## Expected goal
 
@@ -91,11 +91,11 @@ If you want to allow public networks to access the services provided by the Dock
 
     ufw route allow proto tcp from any to any port 80
 
-This allows the public network to access all published ports whose internal port is 80.
+This allows the public network to access all published ports whose container port is `80`.
 
-Note: If we publish a port by using option `-p 8080:80`, we should use the internal port `80`, not the mapping port `8080`.
+Note: If we publish a port by using option `-p 8080:80`, we should use the container port `80`, not the host port `8080`.
 
-If there are multiple containers with a service port of 80, but we only want the external network to access a certain container. For example, if the private address of the container is 172.17.0.2, use the following command:
+If there are multiple containers with a service port of `80`, but we only want the external network to access a certain container. For example, if the private address of the container is `172.17.0.2`, use the following command:
 
     ufw route allow proto tcp from any to 172.17.0.2 port 80
 
@@ -103,7 +103,7 @@ If the network protocol of a service is UDP, for example a DNS service, you can 
 
     ufw route allow proto udp from any to any port 53
 
-Similarly, if only for a specific container, such as IP address 172.17.0.2:
+Similarly, if only for a specific container, such as IP address `172.17.0.2`:
 
     ufw route allow proto udp from any to 172.17.0.2 port 53
 
@@ -119,7 +119,7 @@ The following rules allow UFW to manage whether the public networks are allowed 
 
     -A DOCKER-USER -j ufw-user-forward
 
-The following rules block connection requests initiated by all public networks, but allow internal networks to access external networks. For TCP protocol, it prevents from actively establishing a TCP connection from public networks. For UDP protocol, all accesses to ports which is less then 32767 are blocked. Why is this port? Since the UDP protocol is stateless, it is not possible to block the handshake signal that initiates the connection request as TCP does. For GNU/Linux we can find the local port range in the file `/proc/sys/net/ipv4/ip_local_port_range`. The default range is `32768 60999`. When accessing a UDP protocol service from a running container, the local port will be randomly selected one from the port range, and the server will return the data to this random port. Therefore, we can assume that the listening port of the UDP protocol inside all containers are less then 32768. This is the reason that we don't want public networks to access the UDP ports that less then 32768.
+The following rules block connection requests initiated by all public networks, but allow internal networks to access external networks. For TCP protocol, it prevents from actively establishing a TCP connection from public networks. For UDP protocol, all accesses to ports which is less then 32767 are blocked. Why is this port? Since the UDP protocol is stateless, it is not possible to block the handshake signal that initiates the connection request as TCP does. For GNU/Linux we can find the local port range in the file `/proc/sys/net/ipv4/ip_local_port_range`. The default range is `32768 60999`. When accessing a UDP protocol service from a running container, the local port will be randomly selected one from the port range, and the server will return the data to this random port. Therefore, we can assume that the listening port of the UDP protocol inside all containers are less then `32768`. This is the reason that we don't want public networks to access the UDP ports that less then `32768`.
 
     -A DOCKER-USER -j DROP -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 192.168.0.0/16
     -A DOCKER-USER -j DROP -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 10.0.0.0/8
@@ -227,7 +227,7 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 
     ufw route allow proto udp from any to any port 53
 
-同样的，如果只针对一个特定的容器，比如 IP 地址为 172.17.0.2：
+同样的，如果只针对一个特定的容器，比如 IP 地址为 `172.17.0.2`：
 
     ufw route allow proto udp from any to 172.17.0.2 port 53
 
@@ -243,7 +243,7 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 
     -A DOCKER-USER -j ufw-user-forward
 
-下面的规则阻止了所有外部网络发起的连接请求，但是允许内部网络访问外部网络。对于 TCP 协议，是阻止了从外部网络主动建立 TCP 连接。对于 UDP，是阻止了所有小余端口 32767 的访问。为什么是这个端口的？由于 UDP 协议是无状态的，无法像 TCP 那样阻止发起建立连接请求的握手信号。在 GNU/Linux 上查看文件 `/proc/sys/net/ipv4/ip_local_port_range` 可以看到发出 TCP/UDP 数据后，本地源端口的范围，默认为 `32768 60999`。当从一个运行的容器对外访问一个 UDP 协议的服务时，本地端口将会从这个端口范围里面随机选择一个，服务器将会把数据返回到这个随机端口上。所以，我们可以假定所有容器内部的 UDP 协议的监听端口都小余 32768，不允许外部网络主动连接小余 32768 的 UDP 端口。
+下面的规则阻止了所有外部网络发起的连接请求，但是允许内部网络访问外部网络。对于 TCP 协议，是阻止了从外部网络主动建立 TCP 连接。对于 UDP，是阻止了所有小余端口 `32767` 的访问。为什么是这个端口的？由于 UDP 协议是无状态的，无法像 TCP 那样阻止发起建立连接请求的握手信号。在 GNU/Linux 上查看文件 `/proc/sys/net/ipv4/ip_local_port_range` 可以看到发出 TCP/UDP 数据后，本地源端口的范围，默认为 `32768 60999`。当从一个运行的容器对外访问一个 UDP 协议的服务时，本地端口将会从这个端口范围里面随机选择一个，服务器将会把数据返回到这个随机端口上。所以，我们可以假定所有容器内部的 UDP 协议的监听端口都小余 `32768`，不允许外部网络主动连接小余 `32768` 的 UDP 端口。
 
     -A DOCKER-USER -j DROP -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 192.168.0.0/16
     -A DOCKER-USER -j DROP -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 10.0.0.0/8

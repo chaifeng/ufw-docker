@@ -130,6 +130,53 @@ The following rules block connection requests initiated by all public networks, 
 
     -A DOCKER-USER -j RETURN
 
+## The reason for choosing `ufw-user-forward`, not `ufw-user-input`
+
+### using `ufw-user-input`
+
+Pro:
+
+Easy to use and understand, supports older versions of Ubuntu.
+
+For example, to allow the public to visit a published port whose container port is `8080`, use the command:
+
+    ufw allow 8080
+
+Con:
+
+It not only exposes ports of containers but also exposes ports of the host.
+
+For example, if a service is running on the host, and the port is `8080`. The command `ufw allow 8080` allows the public network to visit the service and all published ports whose containers' port is `8080`. But we just want to expose the service running on the host, or just the service running inside containers, not the both.
+
+To avoid this problem, we may need to use a command similar to the following for all containers:
+
+    ufw allow proto tcp from any to 172.16.0.3 port 8080
+
+### using `ufw-user-forward`
+
+Pro:
+
+Cannot expose services running on hosts and containers at the same time by the same command.
+
+For example, if we want to publish the port `8080` of containers, use the following command:
+
+    ufw route allow 8080
+
+The public network can access all published ports whose container ports are `8080`.
+
+But the port `8080` of the host is still not be accessed by the public network.
+
+Con:
+
+Doesn't support older versions of Ubuntu, and the command is a bit more complicated. But you can use my script.
+
+
+### Conclusion
+
+If we are using an older version of Ubuntu, we can use `ufw-user-input` chain. But be careful to avoid exposing services that should not be exposed
+
+If we are using a newer version of Ubuntu which is support `ufw route` sub-command, we'd better use `ufw-user-forward` chain, and use `ufw route` command to manage firewall rules for containers.
+
 ## 太长不想读
 
 请直接看[解决 UFW 和 Docker 的问题](#解决-ufw-和-docker-的问题)。
@@ -253,3 +300,48 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
     -A DOCKER-USER -j DROP -p udp -m udp --dport 0:32767 -d 172.16.0.0/12
 
     -A DOCKER-USER -j RETURN
+
+### 选择 `ufw-user-forward` 而不是 `ufw-user-input` 的原因
+
+#### 使用 `ufw-user-input`
+
+优点：
+
+使用的 UFW 命令比较简单，也比较容易理解，而且也支持老版本的 Ubuntu
+
+比如，允许公众网络访问一个已经发布出来的容器端口 `8080`，使用命令：
+
+    ufw allow 8080
+
+缺点：
+
+不仅仅是暴露了已经发布的容器端口，也暴露了主机上的端口。
+
+比如，如果在主机上运行了一个端口为 `8080` 的服务。命令 `ufw allow 8080` 允许了公共网络访问这个服务，也允许了访问所有已经发布的容器端口为 `8080` 的服务。但是我们可能只是希望保留主机上的这个服务，或者是运行在容器里面的服务，而不是两个同时暴露。
+
+为了避免这个问题，我们可能需要使用类似下面的命令来管理已经发布的容器端口：
+
+    ufw allow proto tcp from any to 172.16.0.3 port 8080
+
+#### 使用 `ufw-user-forward`
+
+优点：
+
+不会因为同一条命令而同时暴露主机和容器里面的服务。
+
+比如，如果我们希望暴露所有容器端口为 `8080` 的服务，使用下面的命令：
+
+    ufw route allow 8080
+
+现在公共网络可以访问所有容器端口为 `8080` 的已经发布的服务，但是运行在主机上的 `8080` 服务仍然不会被公开。
+
+缺点：
+
+不支持老版本的 Ubuntu，而且命令的使用上可能也会比较复杂。
+
+#### 结论
+
+如果我们正在使用老版本的 Ubuntu，我们可以使用 `ufw-user-input`。但是要小心避免把不该暴露的服务暴露出去。
+
+如果正在使用支持 `ufw route` 命令的新版本的 Ubuntu，我们最好使用 `ufw-user-forward`，并且使用 `ufw route` 来管理与容器相关的防火墙规则。
+

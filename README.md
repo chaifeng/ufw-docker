@@ -164,7 +164,10 @@ For example, if we want to publish the port `8080` of containers, use the follow
 
 The public network can access all published ports whose container ports are `8080`.
 
-But the port `8080` of the host is still not be accessed by the public network.
+But the port `8080` of the host is still not be accessed by the public network. If we want to do so, execute the following command to allow the public access the port on the host separately:
+
+    ufw allow 8080
+
 
 Con:
 
@@ -333,7 +336,9 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 
     ufw route allow 8080
 
-现在公共网络可以访问所有容器端口为 `8080` 的已经发布的服务，但是运行在主机上的 `8080` 服务仍然不会被公开。
+现在公共网络可以访问所有容器端口为 `8080` 的已经发布的服务，但是运行在主机上的 `8080` 服务仍然不会被公开。如果我们希望公开主机上的 `8080` 端口，可以执行下面的命令：
+
+    ufw allow 8080
 
 缺点：
 

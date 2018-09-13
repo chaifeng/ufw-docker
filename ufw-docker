@@ -132,9 +132,24 @@ function ufw-docker--install() {
 function ufw-docker--help() {
 	cat <<-EOF >&2
 	Usage:
-	  ufw-docker <list|allow> [docker-instance-id-or-name] [port[/tcp|/udp]]
-	  ufw-docker delete allow [docker-instance-id-or-name] [port[/tcp|/udp]]
+	  ufw-docker <list|allow> [docker-instance-id-or-name [port[/tcp|/udp]]]
+	  ufw-docker delete allow [docker-instance-id-or-name [port[/tcp|/udp]]]
 	  ufw-docker <status|install|help>
+
+	Examples:
+	  ufw-docker help
+	  ufw-docker install
+
+	  ufw-docker status
+
+	  ufw-docker list httpd
+
+	  ufw-docker allow httpd
+	  ufw-docker allow httpd 80
+	  ufw-docker allow httpd 443/tcp
+
+	  ufw-docker delete allow httpd
+	  ufw-docker delete allow httpd 443/tcp
 	EOF
 }
 

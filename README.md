@@ -180,6 +180,58 @@ If we are using an older version of Ubuntu, we can use `ufw-user-input` chain. B
 
 If we are using a newer version of Ubuntu which is support `ufw route` sub-command, we'd better use `ufw-user-forward` chain, and use `ufw route` command to manage firewall rules for containers.
 
+## `ufw-docker` util
+
+### Install
+
+    sudo wget -O /usr/local/bin/ufw-docker \
+      https://github.com/chaifeng/ufw-docker/raw/master/ufw-docker
+    chmod +x /usr/local/bin/ufw-docker
+
+### Usage
+
+Show help
+
+    ufw-docker help
+
+Modify the `after.rules` file of `ufw`
+
+    ufw-docker install
+
+Show the current firewall allowed forward rules
+
+    ufw-docker status
+
+List all firewall rules related to container `httpd`
+
+    ufw-docker list httpd
+
+Expose the port `80` of the container `httpd`
+
+    ufw-docker allow httpd 80
+
+Expose the `443` port of the container `httpd` and the protocol is `tcp`
+
+    ufw-docker allow httpd 443/tcp
+
+Expose all published ports of the container `httpd`
+
+    ufw-docker allow httpd
+
+Remove all rules related to the container `httpd`
+
+    ufw-docker delete allow httpd
+
+Remove the rule which port is `443` and protocol is `tcp` for the container `httpd`
+
+    ufw-docker delete allow httpd 443/tcp
+
+## Discussions
+
+- [What is the best practice of docker + ufw under Ubuntu - Stack Overflow](https://stackoverflow.com/questions/30383845/what-is-the-best-practice-of-docker-ufw-under-ubuntu/51741599#comment91451547_51741599)
+- [docker and ufw serious problems · Issue #4737 · moby/moby](https://github.com/moby/moby/issues/4737#issuecomment-420112149)
+
+
 ## 太长不想读
 
 请直接看[解决 UFW 和 Docker 的问题](#解决-ufw-和-docker-的问题)。
@@ -350,3 +402,53 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 
 如果正在使用支持 `ufw route` 命令的新版本的 Ubuntu，我们最好使用 `ufw-user-forward`，并且使用 `ufw route` 来管理与容器相关的防火墙规则。
 
+## `ufw-docker` 工具
+
+### 安装
+
+    sudo wget -O /usr/local/bin/ufw-docker \
+      https://github.com/chaifeng/ufw-docker/raw/master/ufw-docker
+    chmod +x /usr/local/bin/ufw-docker
+
+### 使用方法
+
+显示帮助
+
+    ufw-docker help
+
+修改 ufw 的 `after.rules` 文件
+
+    ufw-docker install
+
+显示当前防火墙允许的转发规则
+
+    ufw-docker status
+
+列出所有和容器 `httpd` 相关的防火墙规则
+
+    ufw-docker list httpd
+
+暴露容器 `httpd` 的 `80` 端口
+
+    ufw-docker allow httpd 80
+
+暴露容器 `httpd` 的 `443` 端口，且协议为 `tcp`
+
+    ufw-docker allow httpd 443/tcp
+
+把容器 `httpd` 的所有映射端口都暴露出来
+
+    ufw-docker allow httpd
+
+删除所有和容器 `httpd` 相关的防火墙规则
+
+    ufw-docker delete allow httpd
+
+删除容器 `httpd` 的 `tcp` 端口 `443` 的规则
+
+    ufw-docker delete allow httpd 443/tcp
+
+## 讨论
+
+- [What is the best practice of docker + ufw under Ubuntu - Stack Overflow](https://stackoverflow.com/questions/30383845/what-is-the-best-practice-of-docker-ufw-under-ubuntu/51741599#comment91451547_51741599)
+- [docker and ufw serious problems · Issue #4737 · moby/moby](https://github.com/moby/moby/issues/4737#issuecomment-420112149)

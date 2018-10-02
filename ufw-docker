@@ -162,9 +162,13 @@ function err() {
 }
 
 function die() {
-    err "Fatal:" "$@"
+    err "ERROR:" "$@"
     exit 1
 }
+
+if ! ufw status 2>/dev/null | grep -Fq "Status: active" ; then
+    die "UFW is disabled or you are not root user."
+fi
 
 case "$UFW_ACTION" in
     delete)
@@ -175,10 +179,6 @@ case "$UFW_ACTION" in
         ;&
     list|allow)
         shift || true
-
-        if ! ufw status | grep -F "Status: active" &>/dev/null; then
-            die "UFW is not actived or your are not root user."
-        fi
 
         INSTANCE_ID="${1:?Docker instance name/ID cannot be empty.}"
         INSTANCE_NAME="$(ufw-docker--instance-name "$INSTANCE_ID")"

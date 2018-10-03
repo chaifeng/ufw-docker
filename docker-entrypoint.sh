@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-
+[[ -n "${DEBUG:-}" ]] && set -x
 [[ 0 -eq "$#" ]] && set -- start
 
 ufw_docker_agent=ufw-docker-agent
@@ -24,7 +24,6 @@ function ufw-update-service-instances() {
 
     docker ps -qf "label=com.docker.swarm.service.id=${id}" |
         while read name; do
-            echo "$id $name $port"
             ufw-update-rule-for-instance "${name}" "$port"
         done
 }
@@ -35,7 +34,6 @@ function update-ufw-rules() {
                      -e 's/="/ /' \
                      -e 's/"$//' |
         while read id port; do
-            echo "${id}=$port"
             ufw-update-service-instances "${id}" "${port}"
         done
 }

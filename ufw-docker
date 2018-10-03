@@ -109,12 +109,21 @@ function ufw-docker--service() {
 
             service_port="${2:-}"
 
-            die "ufw-docker--service-${service_action}" "${service_name}" "${service_port}"
+            "ufw-docker--service-${service_action}" "${service_name}" "${service_port}"
             ;;
         *)
             ufw-docker--help
             ;;
     esac
+}
+
+ufw_docker_agent=ufw-docker-agent
+ufw_docker_agent_image="${ufw_docker_agent_image:-chaifeng/${ufw_docker_agent}:181003}"
+
+function ufw-docker--service-allow() {
+    service_name="$1"
+    service_port="$2"
+
 }
 
 function ufw-docker--install() {

@@ -1,0 +1,3 @@
+*
+!ufw-docker
+!docker-entrypoint.sh

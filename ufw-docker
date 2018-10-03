@@ -130,6 +130,19 @@ function ufw-docker--service-allow() {
         return 1
     fi
 
+    declare port="${service_port%/*}"
+    declare proto="(tcp|udp)"
+    [[ "$service_port" = */* ]] && proto="${service_port#*/}"
+
+    if ! docker service inspect "$service_name" \
+         --format '{{range .Endpoint.Spec.Ports}}{{.TargetPort}}/{{.Protocol}}{{end}}' |
+            grep -E "^${port}/${proto}\$"; then
+        die "Service $service_name does not publish port $service_port."
+        return 1
+    fi
+
+    service_label="ufw.public.${service_name}=${service_port}"
+
 }
 
 function ufw-docker--install() {

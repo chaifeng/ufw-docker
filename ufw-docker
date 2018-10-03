@@ -22,7 +22,7 @@ function ufw-docker--list() {
         INSTANCE_PORT="[[:digit:]]\\+"
         PROTO="\\(tcp\\|udp\\)"
     fi
-    ufw status numbered | grep "# allow ${INSTANCE_NAME} ${INSTANCE_PORT}\\/${PROTO}\$"
+    ufw status numbered | grep "# allow ${INSTANCE_NAME}\\( ${INSTANCE_PORT}\\/${PROTO}\\)\\?\$"
 }
 
 function ufw-docker--list-number() {

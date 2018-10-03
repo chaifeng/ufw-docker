@@ -108,7 +108,7 @@ function ufw-docker--instance-name() {
     {
         {
             docker inspect --format='{{.Name}}' "$INSTANCE_ID" 2>/dev/null | sed -e 's,^/,,' |
-                grep "^${GREP_REGEXP_INSTANCE_NAME}\$" &>/dev/null
+                grep "^${GREP_REGEXP_INSTANCE_NAME}\$" 2>/dev/null
         } || echo -n "$INSTANCE_ID";
     } | remove_blank_lines
 }

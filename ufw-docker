@@ -99,6 +99,24 @@ function ufw-docker--instance-name() {
     } | remove_blank_lines
 }
 
+function ufw-docker--service() {
+    service_action="${1:-help}"
+    case "$service_action" in
+        allow)
+            shift || true
+            service_id_or_name="${1:?Missing swarm service name}"
+            service_name="$(docker service inspect "$service_id_or_name" --format '{{.Spec.Name}}')"
+
+            service_port="${2:-}"
+
+            die "ufw-docker--service-${service_action}" "${service_name}" "${service_port}"
+            ;;
+        *)
+            ufw-docker--help
+            ;;
+    esac
+}
+
 function ufw-docker--install() {
 	if ! grep "^# BEGIN UFW AND DOCKER\$" /etc/ufw/after.rules &>/dev/null; then
 		err "Back up /etc/ufw/after.rules"
@@ -197,6 +215,10 @@ case "$UFW_ACTION" in
         INSTANCE_PORT="${INSTANCE_PORT%/*}"
 
         "ufw-docker--$UFW_ACTION" "$INSTANCE_NAME" "$INSTANCE_PORT" "$PROTO"
+        ;;
+    service)
+        shift || true
+        "ufw-docker--$UFW_ACTION" "$@"
         ;;
     status|install)
         ufw-docker--"$UFW_ACTION"

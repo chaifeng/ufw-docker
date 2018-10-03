@@ -2,16 +2,30 @@
 
 [[ 0 -eq "$#" ]] && set -- start
 
-ufw_docker_agent_image=192.168.56.120:5000/ufw-docker-agent
+ufw_docker_agent=ufw-docker-agent
+
+function ufw_update_service_instances() {
+    name="$1"
+    port="$2"
+
+    declare -a opts=("$name")
+    [[ "$port" = all ]] || opts+=("$port")
+
+    docker ps -qf "label=com.docker.swarm.service.name=${name}" |
+        while read name; do
+            echo ufw-docker allow "${opts[@]}"
+        done
+}
 
 case "$1" in
     start)
-        docker service inspect "$ufw_docker_agent" \
-               --format '{{range $k,$v:=.Spec.Labels}}{{$k}} {{$v}}{{"\n"}}{{end}}' |
-            while read label port; do
-                [[ -z "$label" ]] && continue
-                name="${label#ufw.public.}"
+        declare -p | sed -e '/^declare -x ufw_public_/!d' \
+                         -e 's/^declare -x ufw_public_//' \
+                         -e 's/="/ /' \
+                         -e 's/"$//' |
+            while read name port; do
                 echo "${name}=$port"
+                ufw_update_service_instances "${name}" "${port}"
             done
         docker events --format '{{.Time}} {{.Status}} {{.Actor.Attributes.name}}' --filter 'scope=local' --filter 'type=container' |
             while read time status name; do

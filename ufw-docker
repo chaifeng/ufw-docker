@@ -6,7 +6,7 @@ PATH="/bin:/usr/bin:/sbin:/usr/sbin"
 
 UFW_ACTION="${1:-help}"
 
-GREP_REGEXP_INSTANCE_NAME="[-_[:alnum:]]\\+"
+GREP_REGEXP_INSTANCE_NAME="[-_.[:alnum:]]\\+"
 DEFAULT_PROTO=tcp
 
 function ufw-docker--status() {

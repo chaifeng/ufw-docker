@@ -13,6 +13,16 @@ case "$1" in
                 name="${label#ufw.public.}"
                 echo "${name}=$port"
             done
+        docker events --format '{{.Time}} {{.Status}} {{.Actor.Attributes.name}}' --filter 'scope=local' --filter 'type=container' |
+            while read time status name; do
+                echo "$time $status $name" >&2
+
+                declare -a agent_opts=(run --rm --cap-add NET_ADMIN --network host -v /etc/ufw:/etc/ufw "${ufw_docker_agent_image}")
+                [[ "status" = start ]] && agent_opts+=(allow "$name")
+                [[ "status" = stop ]] && agent_opts+=(delete allow "$name")
+
+                echo docker "${agent_opts[@]}"
+            done
         sleep 60; exit 1
         ;;
     delete|allow)

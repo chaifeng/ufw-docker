@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 [[ 0 -eq "$#" ]] && set -- start
 
@@ -10,12 +11,15 @@ function ufw-update-service-instances() {
     port="$2"
 
     declare -a opts
-    [[ "$port" = all ]] || opts+=("$port")
+    [[ "$port" = deny ]] && opts+=(delete)
+    opts+=(allow)
+
+    [[ "$port" = @(all|deny) ]] && port=""
 
     docker ps -qf "label=com.docker.swarm.service.id=${id}" |
         while read name; do
             echo "$id $name $port"
-            run-ufw-docker allow "${name}" "${opts[@]}"
+            run-ufw-docker "${opts[@]}" "${name}" "$port"
         done
 }
 
@@ -31,12 +35,12 @@ function update-ufw-rules() {
 }
 
 function run-ufw-docker() {
-    declare -a docker_opts=(run --rm -t --name ufw-docker-agent-tmp-$(date '+%Y%m%d%H%M%S')
+    declare -a docker_opts=(run --rm -t --name ufw-docker-agent-"${RANDOM}"-$(date '+%Y%m%d%H%M%S')
          --cap-add NET_ADMIN --network host
          --env UFW_DOCKER_FORCE_ADD=yes
          -v /var/run/docker.sock:/var/run/docker.sock
          -v /etc/ufw:/etc/ufw "${ufw_docker_agent_image}" "$@")
-    echo docker "${docker_opts[@]}"
+    docker "${docker_opts[@]}"
 }
 
 function get-service-name-of() {
@@ -53,17 +57,16 @@ case "$1" in
         docker events --format '{{.Time}} {{.Status}} {{.Actor.Attributes.name}}' --filter 'scope=local' --filter 'type=container' |
             while read time status name; do
                 echo "$time $status $name" >&2
+                [[ -z "$name" ]] && continue
 
                 [[ "$status" = @(kill|start) ]] || continue
 
                 declare -n env_name="ufw_public_$(get-service-id-of "$name")"
-                [[ -z "$env_name" ]] && continue
+                [[ -z "${env_name:-}" ]] && continue
 
                 declare -a agent_opts=()
                 if [[ "$status" = kill ]]; then
                     agent_opts+=(delete allow "$name")
-                elif [[ "$status" = start ]]; then
-                    agent_opts+=(allow "$name")
                 fi
 
                 run-ufw-docker "${agent_opts[@]}" >&2

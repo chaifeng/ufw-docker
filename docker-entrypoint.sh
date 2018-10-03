@@ -6,15 +6,16 @@ ufw_docker_agent=ufw-docker-agent
 ufw_docker_agent_image="${ufw_docker_agent_image:-chaifeng/${ufw_docker_agent}:181003}"
 
 function ufw-update-service-instances() {
-    name="$1"
+    id="$1"
     port="$2"
 
-    declare -a opts=("$name")
+    declare -a opts
     [[ "$port" = all ]] || opts+=("$port")
 
-    docker ps -qf "label=com.docker.swarm.service.name=${name}" |
+    docker ps -qf "label=com.docker.swarm.service.id=${id}" |
         while read name; do
-            ufw-docker allow "${opts[@]}"
+            echo "$id $name $port"
+            run-ufw-docker allow "${name}" "${opts[@]}"
         done
 }
 
@@ -23,14 +24,18 @@ function update-ufw-rules() {
                      -e 's/^declare -x ufw_public_//' \
                      -e 's/="/ /' \
                      -e 's/"$//' |
-        while read name port; do
-            echo "${name}=$port"
-            ufw-update-service-instances "${name}" "${port}"
+        while read id port; do
+            echo "${id}=$port"
+            ufw-update-service-instances "${id}" "${port}"
         done
 }
 
 function run-ufw-docker() {
-    echo docker run --rm --cap-add NET_ADMIN --network host -v /etc/ufw:/etc/ufw "${ufw_docker_agent}" "$@"
+    declare -a docker_opts=(run --rm -t --name ufw-docker-agent-tmp-$(date '+%Y%m%d%H%M%S') \
+         --cap-add NET_ADMIN --network host \
+         -v /var/run/docker.sock:/var/run/docker.sock \
+         -v /etc/ufw:/etc/ufw "${ufw_docker_agent_image}" "$@")
+    echo docker "${docker_opts[@]}"
 }
 
 function get-service-name-of() {
@@ -43,7 +48,7 @@ function get-service-id-of() {
 
 case "$1" in
     start)
-        run-ufw-docker update-ufw-rules
+        update-ufw-rules
         docker events --format '{{.Time}} {{.Status}} {{.Actor.Attributes.name}}' --filter 'scope=local' --filter 'type=container' |
             while read time status name; do
                 echo "$time $status $name" >&2
@@ -54,8 +59,11 @@ case "$1" in
                 [[ -z "$env_name" ]] && continue
 
                 declare -a agent_opts=()
-                [[ "$status" = start ]] && agent_opts+=(allow "$name")
-                [[ "$status" = kill ]] && agent_opts+=(delete allow "$name")
+                if [[ "$status" = kill ]]; then
+                    agent_opts+=(delete allow "$name")
+                elif [[ "$status" = start ]]; then
+                    agent_opts+=(allow "$name")
+                fi
 
                 run-ufw-docker "${agent_opts[@]}" >&2
             done

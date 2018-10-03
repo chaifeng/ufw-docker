@@ -143,6 +143,16 @@ function ufw-docker--service-allow() {
 
     service_label="ufw.public.${service_name}=${service_port}"
 
+    if ! docker service inspect "$ufw_docker_agent" &>/dev/null; then
+        err "Not found ufw-docker-agent service, creating ..."
+        docker service create --name "$ufw_docker_agent" --mode global \
+               --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock \
+               --mount type=bind,source=/etc/ufw,target=/etc/ufw,readonly=true \
+               --label "${service_label}" \
+               "${ufw_docker_agent_image}"
+    else
+        docker service update --update-parallelism=0 --label-add "${service_label}" "${ufw_docker_agent}"
+    fi
 }
 
 function ufw-docker--install() {

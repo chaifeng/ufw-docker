@@ -6,8 +6,8 @@ set -euo pipefail
 ufw_docker_agent=ufw-docker-agent
 ufw_docker_agent_image="${ufw_docker_agent_image:-chaifeng/${ufw_docker_agent}:181003}"
 
-function ufw-update-service-instances() {
-    id="$1"
+function ufw-update-rule-for-instance() {
+    name="$1"
     port="$2"
 
     declare -a opts
@@ -16,10 +16,16 @@ function ufw-update-service-instances() {
 
     [[ "$port" = @(all|deny) ]] && port=""
 
+    run-ufw-docker "${opts[@]}" "${name}" "$port"
+}
+function ufw-update-service-instances() {
+    id="$1"
+    port="$2"
+
     docker ps -qf "label=com.docker.swarm.service.id=${id}" |
         while read name; do
             echo "$id $name $port"
-            run-ufw-docker "${opts[@]}" "${name}" "$port"
+            ufw-update-rule-for-instance "${name}" "$port"
         done
 }
 
@@ -64,12 +70,12 @@ case "$1" in
                 declare -n env_name="ufw_public_$(get-service-id-of "$name")"
                 [[ -z "${env_name:-}" ]] && continue
 
-                declare -a agent_opts=()
+                port="${env_name:-deny}"
                 if [[ "$status" = kill ]]; then
-                    agent_opts+=(delete allow "$name")
+                    port=deny
                 fi
 
-                run-ufw-docker "${agent_opts[@]}" >&2
+                ufw-update-rule-for-instance "$name" "$port"
             done
         sleep 60; exit 1
         ;;

@@ -134,6 +134,7 @@ function ufw-docker--service-allow() {
 
     declare port="${service_port%/*}"
     declare proto="(tcp|udp)"
+    [[ -z "$port" ]] && port="[0-9]+"
     [[ "$service_port" = */* ]] && proto="${service_port#*/}"
 
     if ! docker service inspect "$service_name" \

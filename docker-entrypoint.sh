@@ -36,6 +36,10 @@ function get-service-name-of() {
     docker inspect "$1" --format '{{range $k,$v:=.Config.Labels}}{{ if eq $k "com.docker.swarm.service.name" }}{{$v}}{{end}}{{end}}' | grep -E "^.+\$"
 }
 
+function get-service-id-of() {
+    docker inspect "$1" --format '{{range $k,$v:=.Config.Labels}}{{ if eq $k "com.docker.swarm.service.id" }}{{$v}}{{end}}{{end}}' | grep -E "^.+\$"
+}
+
 case "$1" in
     start)
         run-ufw-docker update-ufw-rules
@@ -45,12 +49,12 @@ case "$1" in
 
                 [[ "$status" = @(kill|start) ]] || continue
 
-                declare -n env_name="ufw_public_$(get-service-name-of "$name")"
+                declare -n env_name="ufw_public_$(get-service-id-of "$name")"
                 [[ -z "$env_name" ]] && continue
 
                 declare -a agent_opts=()
-                [[ "status" = start ]] && agent_opts+=(allow "$name")
-                [[ "status" = stop ]] && agent_opts+=(delete allow "$name")
+                [[ "$status" = start ]] && agent_opts+=(allow "$name")
+                [[ "$status" = kill ]] && agent_opts+=(delete allow "$name")
 
                 run-ufw-docker "${agent_opts[@]}" >&2
             done

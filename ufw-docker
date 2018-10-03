@@ -144,7 +144,8 @@ function ufw-docker--service-allow() {
         return 1
     fi
 
-    service_env="ufw_public_${service_name}=${service_port:-all}"
+    service_id="$(docker service inspect "${service_name}" --format "{{.ID}}")"
+    service_env="ufw_public_${service_id}=${service_port:-all}"
 
     if ! docker service inspect "$ufw_docker_agent" &>/dev/null; then
         err "Not found ufw-docker-agent service, creating ..."

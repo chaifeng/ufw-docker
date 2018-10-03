@@ -107,8 +107,8 @@ function ufw-docker--instance-name() {
     local INSTANCE_ID="$1"
     {
         {
-            echo -n "$INSTANCE_ID" | grep "^${GREP_REGEXP_INSTANCE_NAME}\$" &>/dev/null &&
-                docker inspect --format='{{.Name}}' "$INSTANCE_ID" 2>/dev/null | sed -e 's,^/,,';
+            docker inspect --format='{{.Name}}' "$INSTANCE_ID" 2>/dev/null | sed -e 's,^/,,' |
+                grep "^${GREP_REGEXP_INSTANCE_NAME}\$" &>/dev/null
         } || echo -n "$INSTANCE_ID";
     } | remove_blank_lines
 }
@@ -151,7 +151,7 @@ function ufw-docker--service-allow() {
 
     if ! docker service inspect "$service_name" \
          --format '{{range .Endpoint.Spec.Ports}}{{.TargetPort}}/{{.Protocol}}{{end}}' |
-            grep -E "^${port}/${proto}\$"; then
+            grep -E "^${port}/${proto}\$" &>/dev/null; then
         die "Service $service_name does not publish port $service_port."
         return 1
     fi

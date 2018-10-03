@@ -124,6 +124,12 @@ function ufw-docker--service-allow() {
     service_name="$1"
     service_port="$2"
 
+    if [[ -n "$service_port" ]] &&
+           ! grep -E '^[0-9]+(/(tcp|udp))?$' <<< "$service_port" &>/dev/null; then
+        die "Invalid port syntax: $service_port"
+        return 1
+    fi
+
 }
 
 function ufw-docker--install() {

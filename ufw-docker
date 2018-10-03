@@ -50,6 +50,13 @@ function ufw-docker--allow() {
 
     mapfile -t PORT_PROTO_LIST < <(docker inspect --format='{{range $p, $conf := .NetworkSettings.Ports}}{{with $conf}}{{$p}}{{"\n"}}{{end}}{{end}}' "$INSTANCE_NAME" | remove_blank_lines)
 
+    if [[ "${UFW_DOCKER_FORCE_ADD:-}" = "yes" ]]; then
+        for IP in "${INSTANCE_IP_ADDRESSES[@]}"; do
+            ufw-docker--add-rule "$INSTANCE_NAME" "$IP" "${INSTANCE_PORT}" "${PROTO}"
+        done
+        return
+    fi
+
     if [[ -z "${PORT_PROTO_LIST[@]:-}" ]]; then
         err "\"$INSTANCE_NAME\" doesn't have any published ports."
         return 1
@@ -79,8 +86,13 @@ function ufw-docker--add-rule() {
     echo "allow ${INSTANCE_NAME} ${PORT}/${PROTO}"
     typeset -a UFW_OPTS
     UFW_OPTS=(route allow proto "${PROTO}"
-              from any to "$INSTANCE_IP_ADDRESS" port "${PORT}"
-              comment "allow ${INSTANCE_NAME} ${PORT}/${PROTO}")
+              from any to "$INSTANCE_IP_ADDRESS")
+    comment="allow ${INSTANCE_NAME}"
+    [[ -n "$PORT" ]] && {
+        UFW_OPTS+=(port "${PORT}")
+        comment=("$comment ${PORT}/${PROTO}")
+    }
+    UFW_OPTS+=(comment "$comment")
 
     if ufw-docker--list "$INSTANCE_NAME" "$PORT" "$PROTO" &>/dev/null; then
         ufw --dry-run "${UFW_OPTS[@]}" | grep "^Skipping" && return 0
@@ -109,7 +121,7 @@ function ufw-docker--service() {
             service_id_or_name="${1:?Missing swarm service name}"
             service_name="$(docker service inspect "$service_id_or_name" --format '{{.Spec.Name}}')"
 
-            service_port="${2:-}"
+            service_port="${2:?Missing the port number, such as '80/tcp'.}"
 
             "ufw-docker--service-${service_action}" "${service_name}" "${service_port}"
             ;;
@@ -200,8 +212,8 @@ function ufw-docker--help() {
 	  ufw-docker <list|allow> [docker-instance-id-or-name [port[/tcp|/udp]]]
 	  ufw-docker delete allow [docker-instance-id-or-name [port[/tcp|/udp]]]
 
-	  ufw-docker service <list|allow> [swarm-service-id-or-name [port[/tcp|/udp]]]
-	  ufw-docker service delete allow [swarm-service-id-or-name [port[/tcp|/udp]]]
+	  ufw-docker service allow <swarm-service-id-or-name <port</tcp|/udp>>>
+	  ufw-docker service delete allow <swarm-service-id-or-name>
 
 	  ufw-docker <status|install|help>
 
@@ -213,6 +225,7 @@ function ufw-docker--help() {
 
 	  ufw-docker list httpd
 
+
 	  ufw-docker allow httpd
 	  ufw-docker allow httpd 80
 	  ufw-docker allow httpd 443/tcp
@@ -220,14 +233,10 @@ function ufw-docker--help() {
 	  ufw-docker delete allow httpd
 	  ufw-docker delete allow httpd 443/tcp
 
-	  ufw-docker service list httpd
 
-	  ufw-docker service allow httpd
-	  ufw-docker service allow httpd 80
 	  ufw-docker service allow httpd 443/tcp
 
 	  ufw-docker service delete allow httpd
-	  ufw-docker service delete allow httpd 443/tcp
 	EOF
 }
 

@@ -152,10 +152,12 @@ function ufw-docker--service-allow() {
         docker service create --name "$ufw_docker_agent" --mode global \
                --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock \
                --mount type=bind,source=/etc/ufw,target=/etc/ufw,readonly=true \
+               --env ufw_docker_agent_image="${ufw_docker_agent_image}" \
                --env "${service_env}" \
                "${ufw_docker_agent_image}"
     else
         docker service update --update-parallelism=0 \
+               --env-add ufw_docker_agent_image="${ufw_docker_agent_image}" \
                --env-add "${service_env}" \
                --image "${ufw_docker_agent_image}" \
                "${ufw_docker_agent}"

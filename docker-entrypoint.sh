@@ -3,6 +3,7 @@
 [[ 0 -eq "$#" ]] && set -- start
 
 ufw_docker_agent=ufw-docker-agent
+ufw_docker_agent_image="${ufw_docker_agent_image:-chaifeng/${ufw_docker_agent}:181003}"
 
 function ufw-update-service-instances() {
     name="$1"

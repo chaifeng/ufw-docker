@@ -23,7 +23,7 @@ function update-ufw-rules() {
                      -e 's/="/ /' \
                      -e 's/"$//' |
         while read id port; do
-            ufw-allow-or-deny-service "${id}" "${port%*/}"
+            ufw-allow-or-deny-service "${id}" "${port#*/}"
         done
 }
 

@@ -58,7 +58,7 @@ function ufw-docker--allow() {
         return
     fi
 
-    if [[ -z "${PORT_PROTO_LIST[@]:-}" ]]; then
+    if [[ -z "${PORT_PROTO_LIST:-}" ]]; then
         err "\"$INSTANCE_NAME\" doesn't have any published ports."
         return 1
     fi

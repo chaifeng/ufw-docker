@@ -182,7 +182,7 @@ function ufw-docker--service-allow() {
     fi
 
     declare service_id="$(ufw-docker--get-service-id "${service_name}")"
-    [[ -z "$service_id:-" ]] && die "Could not find service \"$service_name\""
+    [[ -z "${service_id:-}" ]] && die "Could not find service \"$service_name\""
 
     service_name="$(ufw-docker--get-service-name "${service_name}")"
 

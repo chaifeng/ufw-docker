@@ -135,9 +135,8 @@ function ufw-docker--service() {
             fi
             shift || true
             declare service_id_or_name="${1:?Missing swarm service name or service ID}"
-            declare service_name="$(docker service inspect "$service_id_or_name" --format '{{.Spec.Name}}')"
 
-            "ufw-docker--service-${service_action}" "${service_name}"
+            "ufw-docker--service-${service_action}" "${service_id_or_name}"
             ;;
         allow)
             shift || true
@@ -183,6 +182,8 @@ function ufw-docker--service-allow() {
     fi
 
     declare service_id="$(ufw-docker--get-service-id "${service_name}")"
+    [[ -z "$service_id:-" ]] && die "Could not find service \"$service_name\""
+
     service_name="$(ufw-docker--get-service-name "${service_name}")"
 
     exec 9< <(docker service inspect "$service_name" \
@@ -195,10 +196,7 @@ function ufw-docker--service-allow() {
     done
     exec 9<&-
 
-    if [[ -z "${service_env:-}" ]]; then
-        die "Service $service_name does not publish port $service_port."
-        return 1
-    fi
+    [[ -z "${service_env:-}" ]] && die "Service $service_name does not publish port $service_port."
 
     if ! docker service inspect "$ufw_docker_agent" &>/dev/null; then
         err "Not found ufw-docker-agent service, creating ..."
@@ -222,9 +220,22 @@ function ufw-docker--service-allow() {
 function ufw-docker--service-delete() {
     declare service_name="$1"
 
-    declare service_id="$(ufw-docker--get-service-id "${service_name}")"
-    service_name="$(ufw-docker--get-service-name "${service_name}")"
-    declare service_env="ufw_public_${service_id}=${service_name}/deny"
+    exec 8< <(docker service inspect "${ufw_docker_agent}" \
+                     --format '{{range $k,$v := .Spec.TaskTemplate.ContainerSpec.Env}}{{ $v }}{{"\n"}}{{end}}' |
+                  sed -e '/^ufw_public_/!d' \
+                      -e 's/^ufw_public_//' \
+                      -e 's/=/ /')
+    while read -u 8 id value; do
+        if [[ "$id" = "$service_name" ]] || [[ "$value" = "${service_name}"/* ]]; then
+            declare service_id="$id"
+            service_name="${value%%/*}"
+            declare service_env="ufw_public_${service_id}=${service_name}/deny"
+            break;
+        fi
+    done
+    exec 8<&-
+
+    [[ -z "${service_env:-}" ]] && die "Could not find service \"$service_name\""
 
     docker service update --update-parallelism=0 \
            --env-add ufw_docker_agent_image="${ufw_docker_agent_image}" \

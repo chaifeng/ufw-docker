@@ -112,7 +112,7 @@ function ufw-docker--add-rule() {
         err "Remove outdated rule."
         ufw-docker--delete "$INSTANCE_NAME" "$PORT" "$PROTO"
     fi
-    echo " ${UFW_OPTS[@]}"
+    echo ufw "${UFW_OPTS[@]}"
     ufw "${UFW_OPTS[@]}"
 }
 

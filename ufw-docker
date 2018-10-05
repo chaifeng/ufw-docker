@@ -185,13 +185,11 @@ function ufw-docker--service-allow() {
     declare service_id="$(ufw-docker--get-service-id "${service_name}")"
     service_name="$(ufw-docker--get-service-name "${service_name}")"
 
-    declare -a service_env
-
     exec 9< <(docker service inspect "$service_name" \
                      --format '{{range .Endpoint.Spec.Ports}}{{.PublishedPort}} {{.TargetPort}}/{{.Protocol}}{{"\n"}}{{end}}')
     while read -u 9 port target_port; do
         if [[ "$target_port" = "${service_port}/${service_proto}" ]]; then
-            service_env="ufw_public_${service_id}=${service_name}/${port}/${service_proto}"
+            declare service_env="ufw_public_${service_id}=${service_name}/${port}/${service_proto}"
             break;
         fi
     done

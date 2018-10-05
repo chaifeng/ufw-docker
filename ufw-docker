@@ -77,6 +77,18 @@ function ufw-docker--allow() {
     return "$RETVAL"
 }
 
+function ufw-docker--add-service-rule() {
+    declare service_id="$1"
+    declare port="${2%/*}"
+    declare proto="${2#*/}"
+
+    declare target_ip_port="$(iptables -t nat -L DOCKER-INGRESS | grep -E "^DNAT\\s+${proto}\\s+.+\\sto:[.0-9]+:${port}\$" | grep -Eo "[.0-9]+:${port}\$")"
+
+    [[ -z "$target_ip_port" ]] && die "Could not find VIP of service ${service_id}."
+
+    ufw-docker--add-rule "$service_id" "${target_ip_port%:*}" "$port" "$proto"
+}
+
 function ufw-docker--add-rule() {
     local INSTANCE_NAME="$1"
     local INSTANCE_IP_ADDRESS="$2"
@@ -114,19 +126,24 @@ function ufw-docker--instance-name() {
 }
 
 function ufw-docker--service() {
-    service_action="${1:-help}"
+    declare service_action="${1:-help}"
     case "$service_action" in
         delete)
             shift || true
             if [[ "${1:?Invalid 'delete' command syntax.}" != "allow" ]]; then
                 die "\"delete\" command only support removing allowed rules"
             fi
-            ;&
+            shift || true
+            declare service_id_or_name="${1:?Missing swarm service name or service ID}"
+            declare service_name="$(docker service inspect "$service_id_or_name" --format '{{.Spec.Name}}')"
+
+            "ufw-docker--service-${service_action}" "${service_name}"
+            ;;
         allow)
             shift || true
-            service_id_or_name="${1:?Missing swarm service name or service ID}"
-            service_name="$(docker service inspect "$service_id_or_name" --format '{{.Spec.Name}}')"
-            service_port="${2:?Missing the port number, such as '80/tcp'.}"
+            declare service_id_or_name="${1:?Missing swarm service name or service ID}"
+            declare service_name="$(docker service inspect "$service_id_or_name" --format '{{.Spec.Name}}')"
+            declare service_port="${2:?Missing the port number, such as '80/tcp'.}"
 
             "ufw-docker--service-${service_action}" "${service_name}" "${service_port}"
             ;;
@@ -185,11 +202,13 @@ function ufw-docker--service-allow() {
                --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock \
                --mount type=bind,source=/etc/ufw,target=/etc/ufw,readonly=true \
                --env ufw_docker_agent_image="${ufw_docker_agent_image}" \
+               --env DEBUG="${DEBUG:-}" \
                --env "${service_env}" \
                "${ufw_docker_agent_image}"
     else
         docker service update --update-parallelism=0 \
                --env-add ufw_docker_agent_image="${ufw_docker_agent_image}" \
+               --env-add DEBUG="${DEBUG:-}" \
                --env-add "${service_env}" \
                --image "${ufw_docker_agent_image}" \
                "${ufw_docker_agent}"
@@ -322,7 +341,7 @@ case "$UFW_ACTION" in
 
         "ufw-docker--$UFW_ACTION" "$INSTANCE_NAME" "$INSTANCE_PORT" "$PROTO"
         ;;
-    service|raw-command)
+    service|raw-command|add-service-rule)
         shift || true
         "ufw-docker--$UFW_ACTION" "$@"
         ;;

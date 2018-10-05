@@ -78,7 +78,7 @@ function main() {
                 done
             sleep 60; exit 1
             ;;
-        delete|allow)
+        delete|allow|add-service-rule)
             ufw-docker "$@"
             ;;
         update-ufw-rules)

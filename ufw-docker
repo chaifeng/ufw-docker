@@ -116,11 +116,16 @@ function ufw-docker--instance-name() {
 function ufw-docker--service() {
     service_action="${1:-help}"
     case "$service_action" in
+        delete)
+            shift || true
+            if [[ "${1:?Invalid 'delete' command syntax.}" != "allow" ]]; then
+                die "\"delete\" command only support removing allowed rules"
+            fi
+            ;&
         allow)
             shift || true
-            service_id_or_name="${1:?Missing swarm service name}"
+            service_id_or_name="${1:?Missing swarm service name or service ID}"
             service_name="$(docker service inspect "$service_id_or_name" --format '{{.Spec.Name}}')"
-
             service_port="${2:?Missing the port number, such as '80/tcp'.}"
 
             "ufw-docker--service-${service_action}" "${service_name}" "${service_port}"
@@ -134,9 +139,15 @@ function ufw-docker--service() {
 ufw_docker_agent=ufw-docker-agent
 ufw_docker_agent_image="${ufw_docker_agent_image:-chaifeng/${ufw_docker_agent}:181003}"
 
+function ufw-docker--get-service-id() {
+    declare service_name="$1"
+    docker service inspect "${service_name}" --format "{{.ID}}"
+}
+
 function ufw-docker--service-allow() {
-    service_name="$1"
-    service_port="$2"
+    declare service_name="$1"
+    declare service_port="$2"
+    declare service_proto=tcp
 
     if [[ -n "$service_port" ]] &&
            ! grep -E '^[0-9]+(/(tcp|udp))?$' <<< "$service_port" &>/dev/null; then
@@ -144,20 +155,29 @@ function ufw-docker--service-allow() {
         return 1
     fi
 
-    declare port="${service_port%/*}"
-    declare proto="(tcp|udp)"
-    [[ -z "$port" ]] && port="[0-9]+"
-    [[ "$service_port" = */* ]] && proto="${service_port#*/}"
+    if [[ "$service_port" = */* ]]; then
+        service_proto="${service_port#*/}"
+        service_port="${service_port%/*}"
+    fi
 
-    if ! docker service inspect "$service_name" \
-         --format '{{range .Endpoint.Spec.Ports}}{{.TargetPort}}/{{.Protocol}}{{end}}' |
-            grep -E "^${port}/${proto}\$" &>/dev/null; then
+    service_id="$(ufw-docker--get-service-id "${service_name}")"
+
+    declare -a service_env
+
+    exec 9< <(docker service inspect "$service_name" \
+                     --format '{{range .Endpoint.Spec.Ports}}{{.PublishedPort}} {{.TargetPort}}/{{.Protocol}}{{"\n"}}{{end}}')
+    while read -u 9 port target_port; do
+        if [[ "$target_port" = "${service_port}/${service_proto}" ]]; then
+            service_env="ufw_public_${service_id}=${port}/${service_proto}"
+            break;
+        fi
+    done
+    exec 9<&-
+
+    if [[ -z "${service_env:-}" ]]; then
         die "Service $service_name does not publish port $service_port."
         return 1
     fi
-
-    service_id="$(docker service inspect "${service_name}" --format "{{.ID}}")"
-    service_env="ufw_public_${service_id}=${service_port:-all}"
 
     if ! docker service inspect "$ufw_docker_agent" &>/dev/null; then
         err "Not found ufw-docker-agent service, creating ..."
@@ -174,6 +194,19 @@ function ufw-docker--service-allow() {
                --image "${ufw_docker_agent_image}" \
                "${ufw_docker_agent}"
     fi
+}
+
+function ufw-docker--service-delete() {
+    service_name="$1"
+
+    service_id="$(ufw-docker--get-service-id "${service_name}")"
+    service_env="ufw_public_${service_id}=deny"
+
+    docker service update --update-parallelism=0 \
+           --env-add ufw_docker_agent_image="${ufw_docker_agent_image}" \
+           --env-add "${service_env}" \
+           --image "${ufw_docker_agent_image}" \
+           "${ufw_docker_agent}"
 }
 
 function ufw-docker--install() {
@@ -228,13 +261,13 @@ function ufw-docker--help() {
 
 	  ufw-docker allow httpd
 	  ufw-docker allow httpd 80
-	  ufw-docker allow httpd 443/tcp
+	  ufw-docker allow httpd 80/tcp
 
 	  ufw-docker delete allow httpd
-	  ufw-docker delete allow httpd 443/tcp
+	  ufw-docker delete allow httpd 80/tcp
 
 
-	  ufw-docker service allow httpd 443/tcp
+	  ufw-docker service allow httpd 80/tcp
 
 	  ufw-docker service delete allow httpd
 	EOF

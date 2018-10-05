@@ -4,10 +4,11 @@ set -euo pipefail
 
 PATH="/bin:/usr/bin:/sbin:/usr/sbin"
 
-UFW_ACTION="${1:-help}"
-
 GREP_REGEXP_INSTANCE_NAME="[-_.[:alnum:]]\\+"
 DEFAULT_PROTO=tcp
+
+ufw_docker_agent=ufw-docker-agent
+ufw_docker_agent_image="${ufw_docker_agent_image:-chaifeng/${ufw_docker_agent}:181005}"
 
 function ufw-docker--status() {
     ufw-docker--list "$GREP_REGEXP_INSTANCE_NAME"
@@ -141,19 +142,15 @@ function ufw-docker--service() {
         allow)
             shift || true
             declare service_id_or_name="${1:?Missing swarm service name or service ID}"
-            declare service_name="$(docker service inspect "$service_id_or_name" --format '{{.Spec.Name}}')"
             declare service_port="${2:?Missing the port number, such as '80/tcp'.}"
 
-            "ufw-docker--service-${service_action}" "${service_name}" "${service_port}"
+            "ufw-docker--service-${service_action}" "${service_id_or_name}" "${service_port}"
             ;;
         *)
             ufw-docker--help
             ;;
     esac
 }
-
-ufw_docker_agent=ufw-docker-agent
-ufw_docker_agent_image="${ufw_docker_agent_image:-chaifeng/${ufw_docker_agent}:181003}"
 
 function ufw-docker--get-service-id() {
     declare service_name="$1"
@@ -329,7 +326,9 @@ if ! ufw status 2>/dev/null | grep -Fq "Status: active" ; then
     die "UFW is disabled or you are not root user."
 fi
 
-case "$UFW_ACTION" in
+ufw_action="${1:-help}"
+
+case "$ufw_action" in
     delete)
         shift || true
         if [[ "${1:?Invalid 'delete' command syntax.}" != "allow" ]]; then
@@ -355,14 +354,14 @@ case "$UFW_ACTION" in
 
         INSTANCE_PORT="${INSTANCE_PORT%/*}"
 
-        "ufw-docker--$UFW_ACTION" "$INSTANCE_NAME" "$INSTANCE_PORT" "$PROTO"
+        "ufw-docker--$ufw_action" "$INSTANCE_NAME" "$INSTANCE_PORT" "$PROTO"
         ;;
     service|raw-command|add-service-rule)
         shift || true
-        "ufw-docker--$UFW_ACTION" "$@"
+        "ufw-docker--$ufw_action" "$@"
         ;;
     status|install)
-        ufw-docker--"$UFW_ACTION"
+        ufw-docker--"$ufw_action"
         ;;
     *)
         ufw-docker--help

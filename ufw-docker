@@ -209,6 +209,10 @@ function ufw-docker--service-delete() {
            "${ufw_docker_agent}"
 }
 
+function ufw-docker--raw-command() {
+    ufw "$@"
+}
+
 function ufw-docker--install() {
 	if ! grep "^# BEGIN UFW AND DOCKER\$" /etc/ufw/after.rules &>/dev/null; then
 		err "Back up /etc/ufw/after.rules"
@@ -318,7 +322,7 @@ case "$UFW_ACTION" in
 
         "ufw-docker--$UFW_ACTION" "$INSTANCE_NAME" "$INSTANCE_PORT" "$PROTO"
         ;;
-    service)
+    service|raw-command)
         shift || true
         "ufw-docker--$UFW_ACTION" "$@"
         ;;

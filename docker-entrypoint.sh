@@ -55,39 +55,43 @@ function get-service-id-of() {
     docker inspect "$1" --format '{{range $k,$v:=.Config.Labels}}{{ if eq $k "com.docker.swarm.service.id" }}{{$v}}{{end}}{{end}}' | grep -E "^.+\$"
 }
 
-case "$1" in
-    start)
-        update-ufw-rules
-        docker events --format '{{.Time}} {{.Status}} {{.Actor.Attributes.name}}' --filter 'scope=local' --filter 'type=container' |
-            while read time status name; do
-                echo "$time $status $name" >&2
-                [[ -z "$name" ]] && continue
+function main() {
+    case "$1" in
+        start)
+            update-ufw-rules
+            docker events --format '{{.Time}} {{.Status}} {{.Actor.Attributes.name}}' --filter 'scope=local' --filter 'type=container' |
+                while read time status name; do
+                    echo "$time $status $name" >&2
+                    [[ -z "$name" ]] && continue
 
-                [[ "$status" = @(kill|start) ]] || continue
+                    [[ "$status" = @(kill|start) ]] || continue
 
-                declare -n env_name="ufw_public_$(get-service-id-of "$name")"
-                [[ -z "${env_name:-}" ]] && continue
+                    declare -n env_name="ufw_public_$(get-service-id-of "$name")"
+                    [[ -z "${env_name:-}" ]] && continue
 
-                port="${env_name:-deny}"
-                if [[ "$status" = kill ]]; then
-                    port=deny
-                fi
+                    declare port="${env_name:-deny}"
+                    if [[ "$status" = kill ]]; then
+                        port=deny
+                    fi
 
-                ufw-update-rule-for-instance "$name" "$port"
-            done
-        sleep 60; exit 1
-        ;;
-    delete|allow)
-        ufw-docker "$@"
-        ;;
-    update-ufw-rules)
-        update-ufw-rules
-        ;;
-    *)
-        if [[ -f "$1" ]]; then
-            exec "$@"
-        else
-            echo "Unknown parameters: $@" >&2
-            exit 1
-        fi
-esac
+                    echo ufw-update-rule-for-instance "$name" "$port"
+                done
+            sleep 60; exit 1
+            ;;
+        delete|allow)
+            ufw-docker "$@"
+            ;;
+        update-ufw-rules)
+            update-ufw-rules
+            ;;
+        *)
+            if [[ -f "$1" ]]; then
+                exec "$@"
+            else
+                echo "Unknown parameters: $@" >&2
+                exit 1
+            fi
+    esac
+}
+
+main "$@"

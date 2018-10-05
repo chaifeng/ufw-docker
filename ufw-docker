@@ -161,6 +161,11 @@ function ufw-docker--get-service-id() {
     docker service inspect "${service_name}" --format "{{.ID}}"
 }
 
+function ufw-docker--get-service-name() {
+    declare service_name="$1"
+    docker service inspect "${service_name}" --format "{{.Spec.Name}}"
+}
+
 function ufw-docker--service-allow() {
     declare service_name="$1"
     declare service_port="$2"
@@ -177,7 +182,8 @@ function ufw-docker--service-allow() {
         service_port="${service_port%/*}"
     fi
 
-    service_id="$(ufw-docker--get-service-id "${service_name}")"
+    declare service_id="$(ufw-docker--get-service-id "${service_name}")"
+    service_name="$(ufw-docker--get-service-name "${service_name}")"
 
     declare -a service_env
 
@@ -185,7 +191,7 @@ function ufw-docker--service-allow() {
                      --format '{{range .Endpoint.Spec.Ports}}{{.PublishedPort}} {{.TargetPort}}/{{.Protocol}}{{"\n"}}{{end}}')
     while read -u 9 port target_port; do
         if [[ "$target_port" = "${service_port}/${service_proto}" ]]; then
-            service_env="ufw_public_${service_id}=${port}/${service_proto}"
+            service_env="ufw_public_${service_id}=${service_name}/${port}/${service_proto}"
             break;
         fi
     done
@@ -216,10 +222,11 @@ function ufw-docker--service-allow() {
 }
 
 function ufw-docker--service-delete() {
-    service_name="$1"
+    declare service_name="$1"
 
-    service_id="$(ufw-docker--get-service-id "${service_name}")"
-    service_env="ufw_public_${service_id}=deny"
+    declare service_id="$(ufw-docker--get-service-id "${service_name}")"
+    service_name="$(ufw-docker--get-service-name "${service_name}")"
+    declare service_env="ufw_public_${service_id}=${service_name}/deny"
 
     docker service update --update-parallelism=0 \
            --env-add ufw_docker_agent_image="${ufw_docker_agent_image}" \

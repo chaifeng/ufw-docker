@@ -257,7 +257,7 @@ function ufw-docker--raw-command() {
 }
 
 function ufw-docker--install() {
-	if ! grep "^# BEGIN UFW AND DOCKER\$" /etc/ufw/after.rules &>/dev/null; then
+	if ! ufw-docker--is-installed; then
 		err "Back up /etc/ufw/after.rules"
 		cp /etc/ufw/after.rules /etc/ufw/after.rules-ufw-docker~"$(date '+%Y-%m-%d-%H%M%S').bak"
 		cat <<-\EOF | tee -a /etc/ufw/after.rules
@@ -284,6 +284,10 @@ function ufw-docker--install() {
 		EOF
 		err "Please restart UFW service manually."
 	fi
+}
+
+function ufw-docker--is-installed() {
+    grep "^# BEGIN UFW AND DOCKER\$" /etc/ufw/after.rules &>/dev/null
 }
 
 function ufw-docker--help() {
@@ -371,7 +375,7 @@ case "$ufw_action" in
         shift || true
         "ufw-docker--$ufw_action" "$@"
         ;;
-    status|install)
+    status|install|is-installed)
         ufw-docker--"$ufw_action"
         ;;
     *)

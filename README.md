@@ -204,8 +204,8 @@ This command does the following things:
 
 We can only use this script on manager nodes to manage firewall rules when using in Swarm mode.
 
-- Modify all `after.rules` files on all nodes, including managers and workers
-- Deploy this script on mananger nodes
+- Modifying all `after.rules` files on all nodes, including managers and workers
+- Deploying this script on manager nodes
 
 Running in Docker Swarm mode, this script will add a global service `ufw-docker-agent`. The image [chaifeng/ufw-docker-agent](https://hub.docker.com/r/chaifeng/ufw-docker-agent/) is also automatically built from this project.
 

@@ -31,7 +31,6 @@ function run-ufw-docker() {
     declare -a docker_opts=(run --rm -t --name "ufw-docker-agent-${RANDOM}-$(date '+%Y%m%d%H%M%S')"
          --cap-add NET_ADMIN --network host
          --env "DEBUG=${DEBUG}"
-         --env "UFW_DOCKER_FORCE_ADD=yes"
          -v /var/run/docker.sock:/var/run/docker.sock
          -v /etc/ufw:/etc/ufw "${ufw_docker_agent_image}" "$@")
     docker "${docker_opts[@]}"

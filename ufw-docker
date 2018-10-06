@@ -51,13 +51,6 @@ function ufw-docker--allow() {
 
     mapfile -t PORT_PROTO_LIST < <(docker inspect --format='{{range $p, $conf := .NetworkSettings.Ports}}{{with $conf}}{{$p}}{{"\n"}}{{end}}{{end}}' "$INSTANCE_NAME" | remove_blank_lines)
 
-    if [[ "${UFW_DOCKER_FORCE_ADD:-}" = "yes" ]]; then
-        for IP in "${INSTANCE_IP_ADDRESSES[@]}"; do
-            ufw-docker--add-rule "$INSTANCE_NAME" "$IP" "${INSTANCE_PORT}" "${PROTO}"
-        done
-        return
-    fi
-
     if [[ -z "${PORT_PROTO_LIST:-}" ]]; then
         err "\"$INSTANCE_NAME\" doesn't have any published ports."
         return 1

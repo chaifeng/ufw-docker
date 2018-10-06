@@ -182,21 +182,38 @@ If we are using a newer version of Ubuntu which is support `ufw route` sub-comma
 
 ## `ufw-docker` util
 
+This script also supports Docker Swarm mode.
+
 ### Install
+
+Download `ufw-docker` script
 
     sudo wget -O /usr/local/bin/ufw-docker \
       https://github.com/chaifeng/ufw-docker/raw/master/ufw-docker
     chmod +x /usr/local/bin/ufw-docker
+
+Then using the following command to modify the `after.rules` file of `ufw`
+
+    ufw-docker install
+
+This command does the following things:
+- Back up the file `/etc/ufw/after.rules`
+- Append the rules of UFW and Docker at the end of the file
+
+#### Install for Docker Swarm mode
+
+We can only use this script on manager nodes to manage firewall rules when using in Swarm mode.
+
+- Modify all `after.rules` files on all nodes, including managers and workers
+- Deploy this script on mananger nodes
+
+Running in Docker Swarm mode, this script will add a global service `ufw-docker-agent`. The image [chaifeng/ufw-docker-agent](https://hub.docker.com/r/chaifeng/ufw-docker-agent/) is also automatically built from this project.
 
 ### Usage
 
 Show help
 
     ufw-docker help
-
-Modify the `after.rules` file of `ufw`
-
-    ufw-docker install
 
 Show the current firewall allowed forward rules
 
@@ -225,6 +242,18 @@ Remove all rules related to the container `httpd`
 Remove the rule which port is `443` and protocol is `tcp` for the container `httpd`
 
     ufw-docker delete allow httpd 443/tcp
+
+Expose the port `80` of the service `web`
+
+    docker service create --name web --publish 8080:80 httpd:alpine
+
+    ufw-docker service allow web 80
+    # or
+    ufw-docker service allow web 80/tcp
+
+Remove rules from all nodes related to the service `web`
+
+    ufw-docker service delete allow web
 
 ## Discussions
 
@@ -404,21 +433,38 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 
 ## `ufw-docker` 工具
 
+现在这个脚本也支持 Docker Swarm。
+
 ### 安装
+
+下载 `ufw-docker` 脚本
 
     sudo wget -O /usr/local/bin/ufw-docker \
       https://github.com/chaifeng/ufw-docker/raw/master/ufw-docker
     chmod +x /usr/local/bin/ufw-docker
+
+使用下列命令来修改 ufw 的 `after.rules` 文件
+
+    ufw-docker install
+
+这个命令做了以下事情：
+- 备份文件 `/etc/ufw/after.rules`
+- 把 UFW 和 Docker 的相关规则添加到文件 `after.rules` 的末尾
+
+#### 为 Docker Swarm 环境安装
+
+仅仅可以在管理节点上使用 `ufw-docker` 这个脚本来管理防火墙规则。
+
+- 在所有的节点上修改 `after.rules` 这个文件，包括管理节点和工作节点
+- 在管理节点上部署这个脚本
+
+运行在 Docker Swarm 模式下，这个脚本将会创建一个全局服务 `ufw-docker-agent`。这个镜像 [chaifeng/ufw-docker-agent](https://hub.docker.com/r/chaifeng/ufw-docker-agent/) 是由本项目自动构建的。
 
 ### 使用方法
 
 显示帮助
 
     ufw-docker help
-
-修改 ufw 的 `after.rules` 文件
-
-    ufw-docker install
 
 显示当前防火墙允许的转发规则
 
@@ -447,6 +493,18 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 删除容器 `httpd` 的 `tcp` 端口 `443` 的规则
 
     ufw-docker delete allow httpd 443/tcp
+
+暴露服务 `web` 的 `80` 端口
+
+    docker service create --name web --publish 8080:80 httpd:alpine
+
+    ufw-docker service allow web 80
+    # 或者
+    ufw-docker service allow web 80/tcp
+
+删除与服务 `web` 相关的规则
+
+    ufw-docker service delete allow web
 
 ## 讨论
 

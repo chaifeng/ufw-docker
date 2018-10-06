@@ -202,23 +202,37 @@ function ufw-docker--service-allow() {
                --env "${service_env}" \
                "${ufw_docker_agent_image}"
     else
+        declare -a service_env_list
+        service_env_list+=(--env-add "${service_env}")
+
+        exec 8< <(ufw-docker--get-env-list)
+        while read -u 8 -r id value; do
+            [[ "$id" = "$service_id" ]] && continue
+            [[ "$value" = "${service_name}"/* ]] && service_env_list+=(--env-rm "ufw_public_${id}")
+        done
+        exec 8<&-
+
         docker service update --update-parallelism=0 \
                --env-add ufw_docker_agent_image="${ufw_docker_agent_image}" \
                --env-add DEBUG="${DEBUG:-}" \
-               --env-add "${service_env}" \
+               "${service_env_list[@]}" \
                --image "${ufw_docker_agent_image}" \
                "${ufw_docker_agent}"
     fi
 }
 
+function ufw-docker--get-env-list() {
+    docker service inspect "${ufw_docker_agent}" \
+           --format '{{range $k,$v := .Spec.TaskTemplate.ContainerSpec.Env}}{{ $v }}{{"\n"}}{{end}}' |
+        sed -e '/^ufw_public_/!d' \
+            -e 's/^ufw_public_//' \
+            -e 's/=/ /'
+}
+
 function ufw-docker--service-delete() {
     declare service_name="$1"
 
-    exec 8< <(docker service inspect "${ufw_docker_agent}" \
-                     --format '{{range $k,$v := .Spec.TaskTemplate.ContainerSpec.Env}}{{ $v }}{{"\n"}}{{end}}' |
-                  sed -e '/^ufw_public_/!d' \
-                      -e 's/^ufw_public_//' \
-                      -e 's/=/ /')
+    exec 8< <(ufw-docker--get-env-list)
     while read -u 8 -r id value; do
         if [[ "$id" = "$service_name" ]] || [[ "$value" = "${service_name}"/* ]]; then
             declare service_id="$id"

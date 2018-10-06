@@ -22,16 +22,16 @@ function update-ufw-rules() {
                      -e 's/^declare -x ufw_public_//' \
                      -e 's/="/ /' \
                      -e 's/"$//' |
-        while read id port; do
+        while read -r id port; do
             ufw-allow-or-deny-service "${id}" "${port#*/}"
         done
 }
 
 function run-ufw-docker() {
-    declare -a docker_opts=(run --rm -t --name ufw-docker-agent-"${RANDOM}"-$(date '+%Y%m%d%H%M%S')
+    declare -a docker_opts=(run --rm -t --name "ufw-docker-agent-${RANDOM}-$(date '+%Y%m%d%H%M%S')"
          --cap-add NET_ADMIN --network host
-         --env DEBUG="$DEBUG"
-         --env UFW_DOCKER_FORCE_ADD=yes
+         --env "DEBUG=${DEBUG}"
+         --env "UFW_DOCKER_FORCE_ADD=yes"
          -v /var/run/docker.sock:/var/run/docker.sock
          -v /etc/ufw:/etc/ufw "${ufw_docker_agent_image}" "$@")
     docker "${docker_opts[@]}"
@@ -63,7 +63,7 @@ function main() {
             if [[ -f "$1" ]]; then
                 exec "$@"
             else
-                echo "Unknown parameters: $@" >&2
+                echo "Unknown parameters:" "$@" >&2
                 exit 1
             fi
     esac

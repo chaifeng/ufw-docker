@@ -83,7 +83,8 @@ function ufw-docker--add-service-rule() {
     declare port="${2%/*}"
     declare proto="${2#*/}"
 
-    declare target_ip_port="$(iptables -t nat -L DOCKER-INGRESS | grep -E "^DNAT\\s+${proto}\\s+.+\\sto:[.0-9]+:${port}\$" | grep -Eo "[.0-9]+:${port}\$")"
+    declare target_ip_port
+    target_ip_port="$(iptables -t nat -L DOCKER-INGRESS | grep -E "^DNAT\\s+${proto}\\s+.+\\sto:[.0-9]+:${port}\$" | grep -Eo "[.0-9]+:${port}\$")"
 
     [[ -z "$target_ip_port" ]] && die "Could not find VIP of service ${service_id}."
 
@@ -96,6 +97,8 @@ function ufw-docker--add-rule() {
     local PORT="$3"
     local PROTO="$4"
 
+    declare comment
+
     echo "allow ${INSTANCE_NAME} ${PORT}/${PROTO}"
     typeset -a UFW_OPTS
     UFW_OPTS=(route allow proto "${PROTO}"
@@ -103,7 +106,7 @@ function ufw-docker--add-rule() {
     comment="allow ${INSTANCE_NAME}"
     [[ -n "$PORT" ]] && {
         UFW_OPTS+=(port "${PORT}")
-        comment=("$comment ${PORT}/${PROTO}")
+        comment="$comment ${PORT}/${PROTO}"
     }
     UFW_OPTS+=(comment "$comment")
 
@@ -178,14 +181,15 @@ function ufw-docker--service-allow() {
         service_port="${service_port%/*}"
     fi
 
-    declare service_id="$(ufw-docker--get-service-id "${service_name}")"
+    declare service_id
+    service_id="$(ufw-docker--get-service-id "${service_name}")"
     [[ -z "${service_id:-}" ]] && die "Could not find service \"$service_name\""
 
     service_name="$(ufw-docker--get-service-name "${service_name}")"
 
     exec 9< <(docker service inspect "$service_name" \
                      --format '{{range .Endpoint.Spec.Ports}}{{.PublishedPort}} {{.TargetPort}}/{{.Protocol}}{{"\n"}}{{end}}')
-    while read -u 9 port target_port; do
+    while read -u 9 -r port target_port; do
         if [[ "$target_port" = "${service_port}/${service_proto}" ]]; then
             declare service_env="ufw_public_${service_id}=${service_name}/${port}/${service_proto}"
             break;
@@ -222,7 +226,7 @@ function ufw-docker--service-delete() {
                   sed -e '/^ufw_public_/!d' \
                       -e 's/^ufw_public_//' \
                       -e 's/=/ /')
-    while read -u 8 id value; do
+    while read -u 8 -r id value; do
         if [[ "$id" = "$service_name" ]] || [[ "$value" = "${service_name}"/* ]]; then
             declare service_id="$id"
             service_name="${value%%/*}"

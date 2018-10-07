@@ -255,6 +255,34 @@ Remove rules from all nodes related to the service `web`
 
     ufw-docker service delete allow web
 
+### Try it out
+
+We use [Vagrant](https://www.vagrantup.com/) to set up a local testing environment. 
+
+Run the following command to create 1 master node and 2 worker nodes
+
+    vagrant up
+
+Log into the master node
+
+    vagrant ssh master
+
+After logging in, create a `web` service
+
+    docker service create --name web --publish 8080:80 httpd:alpine
+
+We shouldn't visit this `web` service from our host
+
+    curl -v http://192.168.56.131:8080
+
+On the master node, run the command to allow the public access port `80` of the `web` service.
+
+    sudo ufw-docker service allow web 80
+
+We can access the `web` service from our host now
+
+    curl "http://192.168.56.13{0,1,2}:8080"
+
 ## Discussions
 
 - [What is the best practice of docker + ufw under Ubuntu - Stack Overflow](https://stackoverflow.com/questions/30383845/what-is-the-best-practice-of-docker-ufw-under-ubuntu/51741599#comment91451547_51741599)
@@ -505,6 +533,34 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 删除与服务 `web` 相关的规则
 
     ufw-docker service delete allow web
+
+### 试试
+
+我们使用 [Vagrant](https://www.vagrantup.com/) 来创建一个本地的测试环境。
+
+运行下面的命令来创建 1 个 master 节点和 2 个 workder 节点
+
+    vagrant up
+
+登录到 master 节点
+
+    vagrant ssh master
+
+登录后，创建 `web`  服务
+
+    docker service create --name web --publish 8080:80 httpd:alpine
+
+我们应该无法从我们的主机上访问这个 `web` 服务
+
+    curl -v http://192.168.56.131:8080
+
+在 master 节点上，运行下面的命令来允许公共访问 `web` 服务端 `80` 端口。
+
+    sudo ufw-docker service allow web 80
+
+现在我们可以在我们的主机上访问这个 `web` 服务了
+
+    curl "http://192.168.56.13{0,1,2}:8080"
 
 ## 讨论
 

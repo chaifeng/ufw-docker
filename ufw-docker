@@ -256,10 +256,38 @@ function ufw-docker--raw-command() {
     ufw "$@"
 }
 
-function ufw-docker--install() {
-	after_rules="/etc/ufw/after.rules"
+after_rules="/etc/ufw/after.rules"
 
-	after_rules_tmp="$(mktemp)"
+function ufw-docker--check() {
+  err "\\n########## iptables -n -L DOCKER-USER ##########"
+  iptables -n -L DOCKER-USER
+
+  err "\\n\\n########## diff $after_rules ##########"
+  ufw-docker--check-install && err "\\nCheck done."
+}
+
+declare -a files_to_be_deleted
+
+function rm-on-exit() {
+  [[ $# -gt 0 ]] && files_to_be_deleted+=("$@")
+}
+
+function on-exit() {
+  for file in "${files_to_be_deleted[@]}"; do
+    [[ -f "$file" ]] && rm -vr "$file"
+  done
+  files_to_be_deleted=()
+}
+
+trap on-exit EXIT INT TERM QUIT ABRT ERR
+
+function ufw-docker--check-install() {
+	local after_rules_tmp
+	after_rules_tmp="${1:-}"
+	if [[ -z "$after_rules_tmp" ]]; then
+	  after_rules_tmp="$(mktemp)"
+	  rm-on-exit "$after_rules_tmp"
+	fi
 	sed "/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d" "$after_rules" > "$after_rules_tmp"
 	>> "${after_rules_tmp}" cat <<-\EOF
 	# BEGIN UFW AND DOCKER
@@ -286,19 +314,27 @@ function ufw-docker--install() {
 	# END UFW AND DOCKER
 	EOF
 
-	if ! diff -u --color=auto "$after_rules" "$after_rules_tmp"; then
-	  after_rules_bak="${after_rules}-ufw-docker~$(date '+%Y-%m-%d-%H%M%S')~"
-	  err "\nBacking up $after_rules to $after_rules_bak"
+	diff -u --color=auto "$after_rules" "$after_rules_tmp"
+}
+
+function ufw-docker--install() {
+  local after_rules_tmp
+  after_rules_tmp="$(mktemp)"
+  rm-on-exit "$after_rules_tmp"
+
+  if ! ufw-docker--check-install "$after_rules_tmp"; then
+	  local after_rules_bak
+    after_rules_bak="${after_rules}-ufw-docker~$(date '+%Y-%m-%d-%H%M%S')~"
+	  err "\\nBacking up $after_rules to $after_rules_bak"
 	  cp "$after_rules" "$after_rules_bak"
 	  cat "$after_rules_tmp" > "$after_rules"
-
-	  err "Please restart UFW service manually by using the following command:"
-	  if type systemctl &>/dev/null; then
-	    err "    sudo systemctl restart ufw"
-	  else
-	    err "    sudo service ufw restart"
-	  fi
-	fi
+    err "Please restart UFW service manually by using the following command:"
+    if type systemctl &>/dev/null; then
+      err "    sudo systemctl restart ufw"
+    else
+      err "    sudo service ufw restart"
+    fi
+  fi
 }
 
 function ufw-docker--help() {
@@ -310,11 +346,13 @@ function ufw-docker--help() {
 	  ufw-docker service allow <swarm-service-id-or-name <port</tcp|/udp>>>
 	  ufw-docker service delete allow <swarm-service-id-or-name>
 
-	  ufw-docker <status|install|help>
+	  ufw-docker <status|install|check|help>
 
 	Examples:
 	  ufw-docker help
-	  ufw-docker install
+
+	  ufw-docker check           # Check the installation of firewall rules
+	  ufw-docker install         # Install firewall rules
 
 	  ufw-docker status
 
@@ -386,7 +424,7 @@ case "$ufw_action" in
         shift || true
         "ufw-docker--$ufw_action" "$@"
         ;;
-    status|install|is-installed)
+    status|install|check)
         ufw-docker--"$ufw_action"
         ;;
     *)

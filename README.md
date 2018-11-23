@@ -215,6 +215,14 @@ Show help
 
     ufw-docker help
 
+Check the installation of firewall rules in UFW configurations
+
+    ufw-docker check
+
+Update UFW configurations, add the necessary firewall rules
+
+    ufw-docker install
+
 Show the current firewall allowed forward rules
 
     ufw-docker status
@@ -493,6 +501,14 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 显示帮助
 
     ufw-docker help
+
+检查 UFW 配置文件中防火墙规则的安装
+
+    ufw-docker check
+
+更新 UFW 的配置文件，添加必要的防火墙规则
+
+    ufw-docker install
 
 显示当前防火墙允许的转发规则
 

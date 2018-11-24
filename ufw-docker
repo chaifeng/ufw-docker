@@ -274,7 +274,7 @@ function rm-on-exit() {
 
 function on-exit() {
   for file in "${files_to_be_deleted[@]}"; do
-    [[ -f "$file" ]] && rm -vr "$file"
+    [[ -f "$file" ]] && rm -r "$file"
   done
   files_to_be_deleted=()
 }
@@ -282,12 +282,9 @@ function on-exit() {
 trap on-exit EXIT INT TERM QUIT ABRT ERR
 
 function ufw-docker--check-install() {
-	local after_rules_tmp
-	after_rules_tmp="${1:-}"
-	if [[ -z "$after_rules_tmp" ]]; then
-	  after_rules_tmp="$(mktemp)"
-	  rm-on-exit "$after_rules_tmp"
-	fi
+	after_rules_tmp="${after_rules_tmp:-$(mktemp)}"
+	rm-on-exit "$after_rules_tmp"
+
 	sed "/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d" "$after_rules" > "$after_rules_tmp"
 	>> "${after_rules_tmp}" cat <<-\EOF
 	# BEGIN UFW AND DOCKER
@@ -318,11 +315,7 @@ function ufw-docker--check-install() {
 }
 
 function ufw-docker--install() {
-  local after_rules_tmp
-  after_rules_tmp="$(mktemp)"
-  rm-on-exit "$after_rules_tmp"
-
-  if ! ufw-docker--check-install "$after_rules_tmp"; then
+  if ! ufw-docker--check-install; then
 	  local after_rules_bak
     after_rules_bak="${after_rules}-ufw-docker~$(date '+%Y-%m-%d-%H%M%S')~"
 	  err "\\nBacking up $after_rules to $after_rules_bak"

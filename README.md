@@ -72,6 +72,8 @@ Modify the UFW configuration file `/etc/ufw/after.rules` and add the following r
     -A DOCKER-USER -j RETURN -s 172.16.0.0/12
     -A DOCKER-USER -j RETURN -s 192.168.0.0/16
 
+    -A DOCKER-USER -p udp -m udp --sport 53 --dport 1024:65535 -j RETURN
+
     -A DOCKER-USER -j ufw-user-forward
 
     -A DOCKER-USER -j DROP -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 192.168.0.0/16
@@ -129,6 +131,12 @@ The following rules block connection requests initiated by all public networks, 
     -A DOCKER-USER -j DROP -p udp -m udp --dport 0:32767 -d 172.16.0.0/12
 
     -A DOCKER-USER -j RETURN
+
+If a docker container doesn't follow the OS's settings when receiving data, that is to say, the minimal port number less than `32768`. For example, we have a Dnsmasq container. The minimal port number that Dnsmasq uses for receiving data is `1024`. We can use the following command to allow a bigger port range used for receiving DNS packages.
+
+    ufw route allow proto udp from any port 53 to any port 1024:65535
+
+Because DNS is a very common service, so there is already a firewall rule to allow a bigger port range to receive DNS packages.
 
 ## The reason for choosing `ufw-user-forward`, not `ufw-user-input`
 
@@ -363,6 +371,8 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
     -A DOCKER-USER -j RETURN -s 172.16.0.0/12
     -A DOCKER-USER -j RETURN -s 192.168.0.0/16
 
+    -A DOCKER-USER -p udp -m udp --sport 53 --dport 1024:65535 -j RETURN
+
     -A DOCKER-USER -j ufw-user-forward
 
     -A DOCKER-USER -j DROP -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 192.168.0.0/16
@@ -420,6 +430,12 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
     -A DOCKER-USER -j DROP -p udp -m udp --dport 0:32767 -d 172.16.0.0/12
 
     -A DOCKER-USER -j RETURN
+
+如果一个容器在接受数据的时候，端口号没有遵循操作系统的设定，也就是说最小端口号要小余 `32768`。比如运行了一个 Dnsmasq 的容器，Dnsmasq 用于接受数据的最小端口号默认是 `1024`。那可以用下面的命令来允许 Dnsmasq 这个容器使用一个更大的端口范围来接受数据。
+
+    ufw route allow proto udp from any port 53 to any port 1024:65535
+
+因为 DNS 是一个非常常见的服务，所以已经有一条规则用于允许使用一个更大的端口范围来接受 DNS 数据包
 
 ### 选择 `ufw-user-forward` 而不是 `ufw-user-input` 的原因
 

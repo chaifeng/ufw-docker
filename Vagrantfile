@@ -42,7 +42,7 @@ Vagrant.configure('2') do |config|
 
       ufw reload
 
-      ln -s /vagrant/ufw-docker /usr/local/bin/
+      [[ -L /usr/local/bin/ufw-docker ]] || ln -s /vagrant/ufw-docker /usr/local/bin/
     }
   SHELL
 

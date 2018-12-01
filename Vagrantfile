@@ -40,7 +40,9 @@ Vagrant.configure('2') do |config|
 
       sed -i -e 's,192\.168\.0\.0/16,#{ip_prefix}.128/28,' /etc/ufw/after.rules
 
-      ufw reload
+      systemctl restart ufw
+
+      iptables -I DOCKER-USER 4 -p udp -j LOG --log-prefix '[UFW DOCKER] '
 
       [[ -L /usr/local/bin/ufw-docker ]] || ln -s /vagrant/ufw-docker /usr/local/bin/
     }

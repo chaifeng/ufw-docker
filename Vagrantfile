@@ -60,6 +60,14 @@ Vagrant.configure('2') do |config|
             daemonize: true
     end
 
+    ufw_docker_agent_image = "192.168.56.130:5000/chaifeng/ufw-docker-agent:test"
+
+    master.vm.provision "docker-build", type: 'shell', inline: <<-SHELL
+      set -ex
+      docker build -t #{ufw_docker_agent_image} /vagrant
+      docker push #{ufw_docker_agent_image}
+    SHELL
+
     master.vm.provision "swarm-init", type: 'shell', inline: <<-SHELL
       set -ex
       docker info | fgrep 'Swarm: active' && exit 0

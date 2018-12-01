@@ -31,7 +31,7 @@ Vagrant.configure('2') do |config|
 
   config.vm.provision 'ufw-docker', type: 'shell', inline: <<-SHELL
     set -ex
-    /vagrant/ufw-docker is-installed || {
+    /vagrant/ufw-docker check || {
       ufw allow OpenSSH
       ufw allow from #{ip_prefix}.128/28 to any
 

@@ -8,7 +8,7 @@ GREP_REGEXP_INSTANCE_NAME="[-_.[:alnum:]]\\+"
 DEFAULT_PROTO=tcp
 
 ufw_docker_agent=ufw-docker-agent
-ufw_docker_agent_image="${ufw_docker_agent_image:-chaifeng/${ufw_docker_agent}:181005}"
+ufw_docker_agent_image="${UFW_DOCKER_AGENT_IMAGE:-chaifeng/${ufw_docker_agent}:181005}"
 
 function ufw-docker--status() {
     ufw-docker--list "$GREP_REGEXP_INSTANCE_NAME"

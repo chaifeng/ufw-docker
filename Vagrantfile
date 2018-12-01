@@ -66,6 +66,9 @@ Vagrant.configure('2') do |config|
       set -ex
       docker build -t #{ufw_docker_agent_image} /vagrant
       docker push #{ufw_docker_agent_image}
+
+      echo "export UFW_DOCKER_AGENT_IMAGE=#{ufw_docker_agent_image}" > /etc/profile.d/ufw-docker.sh
+      echo "Defaults env_keep += UFW_DOCKER_AGENT_IMAGE" > /etc/sudoers.d/98_ufw-docker
     SHELL
 
     master.vm.provision "swarm-init", type: 'shell', inline: <<-SHELL

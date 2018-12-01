@@ -52,9 +52,18 @@ Vagrant.configure('2') do |config|
     master.vm.hostname = "master"
     master.vm.network "private_network", ip: "#{ip_prefix}.130"
 
+    master.vm.provision "docker-registry", type: 'docker' do |d|
+      d.run "registry",
+            image: "registry:2",
+            args: "-p 5000:5000",
+            restart: "always",
+            daemonize: true
+    end
+
     master.vm.provision "swarm-init", type: 'shell', inline: <<-SHELL
       set -ex
-      docker run -d -p 5000:5000 --restart=always --name registry registry:2
+      docker info | fgrep 'Swarm: active' && exit 0
+
       docker swarm init --advertise-addr eth1
       docker swarm join-token worker --quiet > /vagrant/.vagrant/docker-join-token
     SHELL
@@ -67,6 +76,8 @@ Vagrant.configure('2') do |config|
 
       node.vm.provision "swarm-join", type: 'shell', inline: <<-SHELL
         set -ex
+        docker info | fgrep 'Swarm: active' && exit 0
+
         [[ -f /vagrant/.vagrant/docker-join-token ]] &&
         docker swarm join --token "$(</vagrant/.vagrant/docker-join-token)" #{ip_prefix}.130:2377
       SHELL

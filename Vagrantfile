@@ -71,8 +71,8 @@ Vagrant.configure('2') do |config|
       echo "export UFW_DOCKER_AGENT_IMAGE=#{ufw_docker_agent_image}" > /etc/profile.d/ufw-docker.sh
       echo "export DEBUG=true" >> /etc/profile.d/ufw-docker.sh
 
-      echo "Defaults env_keep = UFW_DOCKER_AGENT_IMAGE" > /etc/sudoers.d/98_ufw-docker
-      echo "Defaults env_keep = DEBUG" >> /etc/sudoers.d/98_ufw-docker
+      echo "Defaults env_keep += UFW_DOCKER_AGENT_IMAGE" > /etc/sudoers.d/98_ufw-docker
+      echo "Defaults env_keep += DEBUG" >> /etc/sudoers.d/98_ufw-docker
     SHELL
 
     master.vm.provision "swarm-init", type: 'shell', inline: <<-SHELL

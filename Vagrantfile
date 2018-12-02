@@ -9,6 +9,7 @@ Vagrant.configure('2') do |config|
 
   config.vm.provider 'virtualbox' do |vb|
     vb.memory = '1024'
+    vb.default_nic_type = "virtio"
   end
 
   ip_prefix="192.168.56"

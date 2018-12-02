@@ -42,9 +42,9 @@ Vagrant.configure('2') do |config|
 
       systemctl restart ufw
 
-      iptables -I DOCKER-USER 4 -p udp -j LOG --log-prefix '[UFW DOCKER] '
-
       [[ -L /usr/local/bin/ufw-docker ]] || ln -s /vagrant/ufw-docker /usr/local/bin/
+
+      iptables -I DOCKER-USER 4 -p udp -j LOG --log-prefix '[UFW DOCKER] '
     }
   SHELL
 
@@ -68,7 +68,10 @@ Vagrant.configure('2') do |config|
       docker push #{ufw_docker_agent_image}
 
       echo "export UFW_DOCKER_AGENT_IMAGE=#{ufw_docker_agent_image}" > /etc/profile.d/ufw-docker.sh
-      echo "Defaults env_keep += UFW_DOCKER_AGENT_IMAGE" > /etc/sudoers.d/98_ufw-docker
+      echo "export DEBUG=true" >> /etc/profile.d/ufw-docker.sh
+
+      echo "Defaults env_keep = UFW_DOCKER_AGENT_IMAGE" > /etc/sudoers.d/98_ufw-docker
+      echo "Defaults env_keep = DEBUG" >> /etc/sudoers.d/98_ufw-docker
     SHELL
 
     master.vm.provision "swarm-init", type: 'shell', inline: <<-SHELL

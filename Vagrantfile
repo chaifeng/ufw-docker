@@ -14,8 +14,8 @@ Vagrant.configure('2') do |config|
 
   ip_prefix="192.168.56"
 
-  config.vm.provision 'docker', type: 'shell', inline: <<-SHELL
-    set -ex
+  config.vm.provision 'docker-daemon-config', type: 'shell', inline: <<-SHELL
+    set -exu
     if [[ ! -f /etc/docker/daemon.json ]]; then
       echo '{' >> /etc/docker/daemon.json
       echo '  "insecure-registries": ["localhost:5000", "#{ip_prefix}.130:5000"]' >> /etc/docker/daemon.json
@@ -31,7 +31,9 @@ Vagrant.configure('2') do |config|
   SHELL
 
   config.vm.provision 'ufw-docker', type: 'shell', inline: <<-SHELL
-    set -ex
+    set -exu
+    export DEBUG=true
+    lsb_release -is | grep -Fi ubuntu
     /vagrant/ufw-docker check || {
       ufw allow OpenSSH
       ufw allow from #{ip_prefix}.128/28 to any
@@ -63,8 +65,8 @@ Vagrant.configure('2') do |config|
 
     ufw_docker_agent_image = "192.168.56.130:5000/chaifeng/ufw-docker-agent:test"
 
-    master.vm.provision "docker-build", type: 'shell', inline: <<-SHELL
-      set -ex
+    master.vm.provision "docker-build-ufw-docker-agent", type: 'shell', inline: <<-SHELL
+      set -exu
       docker build -t #{ufw_docker_agent_image} /vagrant
       docker push #{ufw_docker_agent_image}
 
@@ -76,7 +78,7 @@ Vagrant.configure('2') do |config|
     SHELL
 
     master.vm.provision "swarm-init", type: 'shell', inline: <<-SHELL
-      set -ex
+      set -exuo pipefail
       docker info | fgrep 'Swarm: active' && exit 0
 
       docker swarm init --advertise-addr eth1
@@ -90,7 +92,7 @@ Vagrant.configure('2') do |config|
       node.vm.network "private_network", ip: "#{ip_prefix}.#{ 130 + ip }"
 
       node.vm.provision "swarm-join", type: 'shell', inline: <<-SHELL
-        set -ex
+        set -exuo pipefail
         docker info | fgrep 'Swarm: active' && exit 0
 
         [[ -f /vagrant/.vagrant/docker-join-token ]] &&

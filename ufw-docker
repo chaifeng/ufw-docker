@@ -379,6 +379,8 @@ function die() {
     exit 1
 }
 
+# __main__
+
 if ! ufw status 2>/dev/null | grep -Fq "Status: active" ; then
     die "UFW is disabled or you are not root user."
 fi

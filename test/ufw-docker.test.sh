@@ -4,9 +4,17 @@ set -euo pipefail
 working_dir="$(cd "$(dirname "$BASH_SOURCE")"; pwd -P)"
 source "$working_dir"/bach/bach.sh
 
+@setup {
+    set -euxo pipefail
+}
+
 @setup-test {
     @mocktrue ufw status
     @mocktrue grep -Fq "Status: active"
+
+    @ignore remove_blank_lines
+
+    DEFAULT_PROTO=tcp
 }
 
 function ufw-docker() {
@@ -126,7 +134,7 @@ test-ufw-docker-list-httpd() {
     ufw-docker list httpd
 }
 test-ufw-docker-list-httpd-assert() {
-    ufw-docker--list httpd-container-name "" ""
+    ufw-docker--list httpd-container-name "" tcp
 }
 
 
@@ -135,7 +143,7 @@ test-ufw-docker-allow-httpd() {
     ufw-docker allow httpd
 }
 test-ufw-docker-allow-httpd-assert() {
-    ufw-docker--allow httpd-container-name "" ""
+    ufw-docker--allow httpd-container-name "" tcp
 }
 
 
@@ -144,7 +152,7 @@ test-ufw-docker-allow-httpd-80() {
     ufw-docker allow httpd 80
 }
 test-ufw-docker-allow-httpd-80-assert() {
-    ufw-docker--allow httpd-container-name 80 ""
+    ufw-docker--allow httpd-container-name 80 tcp
 }
 
 
@@ -153,7 +161,7 @@ test-ufw-docker-allow-httpd-80tcp() {
     ufw-docker allow httpd 80/tcp
 }
 test-ufw-docker-allow-httpd-80tcp-assert() {
-    ufw-docker--allow httpd-container-name 80 ""
+    ufw-docker--allow httpd-container-name 80 tcp
 }
 
 
@@ -179,7 +187,7 @@ test-ufw-docker-list-httpd() {
     ufw-docker list httpd
 }
 test-ufw-docker-list-httpd-assert() {
-    ufw-docker--list httpd-container-name "" ""
+    ufw-docker--list httpd-container-name "" tcp
 }
 
 
@@ -188,7 +196,7 @@ test-ufw-docker-delete-allow-httpd() {
     ufw-docker delete allow httpd
 }
 test-ufw-docker-delete-allow-httpd-assert() {
-    ufw-docker--delete httpd-container-name "" ""
+    ufw-docker--delete httpd-container-name "" tcp
 }
 
 
@@ -198,4 +206,16 @@ test-ASSERT-FAIL-ufw-docker-delete-only-supports-allowed-rules() {
 }
 test-ASSERT-FAIL-ufw-docker-delete-only-supports-allowed-rules-assert() {
     die "\"delete\" command only support removing allowed rules"
+}
+
+test-ufw-docker--allow-instance-not-found() {
+    @load_function "$working_dir/../ufw-docker" ufw-docker--allow
+
+    @mockfalse docker inspect invalid-instance
+    @mockfalse die "Docker instance \"invalid-instance\" doesn't exist."
+
+    ufw-docker--allow invalid-instance 80 tcp
+}
+test-ufw-docker--allow-instance-not-found-assert() {
+    @fail
 }

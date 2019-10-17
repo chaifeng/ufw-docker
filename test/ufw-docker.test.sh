@@ -208,8 +208,18 @@ test-ASSERT-FAIL-ufw-docker-delete-only-supports-allowed-rules-assert() {
     die "\"delete\" command only support removing allowed rules"
 }
 
-test-ufw-docker--allow-instance-not-found() {
+
+function setup-ufw-docker--allow() {
     @load_function "$working_dir/../ufw-docker" ufw-docker--allow
+
+    @mocktrue docker inspect instance-name
+    @mock docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{"\n"}}{{end}}' instance-name === @stdout 172.18.0.3
+    @mock docker inspect --format='{{range $p, $conf := .NetworkSettings.Ports}}{{with $conf}}{{$p}}{{"\n"}}{{end}}{{end}}' instance-name === @stdout 5000/tcp 8080/tcp 5353/udp
+}
+
+
+test-ufw-docker--allow-instance-not-found() {
+    setup-ufw-docker--allow
 
     @mockfalse docker inspect invalid-instance
     @mockfalse die "Docker instance \"invalid-instance\" doesn't exist."
@@ -217,5 +227,51 @@ test-ufw-docker--allow-instance-not-found() {
     ufw-docker--allow invalid-instance 80 tcp
 }
 test-ufw-docker--allow-instance-not-found-assert() {
+    @do-nothing
     @fail
+}
+
+
+test-ufw-docker--allow-instance-but-the-port-not-match() {
+    setup-ufw-docker--allow
+
+    ufw-docker--allow instance-name 80 tcp
+}
+test-ufw-docker--allow-instance-but-the-port-not-match-assert() {
+    err 'Fail to add rule(s), cannot find the published port 80/tcp of instance "instance-name" or cannot update outdated rule(s).'
+    @fail
+}
+
+
+test-ufw-docker--allow-instance-and-match-the-port() {
+    setup-ufw-docker--allow
+
+    ufw-docker--allow instance-name 5000 tcp
+}
+test-ufw-docker--allow-instance-and-match-the-port-assert() {
+    ufw-docker--add-rule instance-name 172.18.0.3 5000 tcp
+}
+
+
+test-ufw-docker--allow-instance-all-published-port() {
+    setup-ufw-docker--allow
+
+    ufw-docker--allow instance-name "" ""
+}
+test-ufw-docker--allow-instance-all-published-port-assert() {
+    ufw-docker--add-rule instance-name 172.18.0.3 5000 tcp
+    ufw-docker--add-rule instance-name 172.18.0.3 8080 tcp
+    ufw-docker--add-rule instance-name 172.18.0.3 5353 udp
+}
+
+
+test-ufw-docker--allow-instance-all-published-tcp-port() {
+    setup-ufw-docker--allow
+
+    ufw-docker--allow instance-name "" tcp
+}
+test-ufw-docker--allow-instance-all-published-tcp-port-assert() {
+    ufw-docker--add-rule instance-name 172.18.0.3 5000 tcp
+    ufw-docker--add-rule instance-name 172.18.0.3 8080 tcp
+    ufw-docker--add-rule instance-name 172.18.0.3 5353 udp # FIXME
 }

@@ -243,6 +243,17 @@ test-ufw-docker--allow-instance-but-the-port-not-match-assert() {
 }
 
 
+test-ufw-docker--allow-instance-but-the-proto-not-match() {
+    setup-ufw-docker--allow
+
+    ufw-docker--allow instance-name 5353 tcp
+}
+test-ufw-docker--allow-instance-but-the-proto-not-match-assert() {
+    err 'Fail to add rule(s), cannot find the published port 5353/tcp of instance "instance-name" or cannot update outdated rule(s).'
+    @fail
+}
+
+
 test-ufw-docker--allow-instance-and-match-the-port() {
     setup-ufw-docker--allow
 

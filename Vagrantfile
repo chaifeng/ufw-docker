@@ -55,6 +55,10 @@ Vagrant.configure('2') do |config|
     master.vm.hostname = "master"
     master.vm.network "private_network", ip: "#{ip_prefix}.130"
 
+    master.vm.provision "unit-testing", type: 'shell', inline: <<-SHELL
+        /vagrant/test/ufw-docker.test.sh
+    SHELL
+
     master.vm.provision "docker-registry", type: 'docker' do |d|
       d.run "registry",
             image: "registry:2",

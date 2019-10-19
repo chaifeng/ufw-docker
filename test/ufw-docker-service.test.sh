@@ -15,10 +15,13 @@ source "$working_dir"/bach/bach.sh
     @ignore remove_blank_lines
     @ignore echo
     @ignore err
-    @ignore die
 
     DEFAULT_PROTO=tcp
     GREP_REGEXP_INSTANCE_NAME="[-_.[:alnum:]]\\+"
+}
+
+function die() {
+    return 1
 }
 
 function load-ufw-docker-function() {
@@ -118,4 +121,44 @@ test-ufw-docker--get-service-name() {
 }
 test-ufw-docker--get-service-name-assert() {
     docker service inspect database --format "{{.Spec.Name}}"
+}
+
+
+test-ufw-docker--service-allow-invalid-port-syntax() {
+    @mockfalse grep -E '^[0-9]+(/(tcp|udp))?$'
+
+    load-ufw-docker-function ufw-docker--service-allow
+    ufw-docker--service-allow webapp invalid-port
+}
+test-ufw-docker--service-allow-invalid-port-syntax-assert() {
+    @do-nothing
+    @fail
+}
+
+
+test-ufw-docker--service-allow-an-non-existed-service() {
+    @mocktrue grep -E '^[0-9]+(/(tcp|udp))?$'
+    @mock ufw-docker--get-service-id web404 === @stdout ""
+
+    load-ufw-docker-function ufw-docker--service-allow
+    ufw-docker--service-allow web404 80/tcp
+}
+test-ufw-docker--service-allow-an-non-existed-service-assert() {
+    @do-nothing
+    @fail
+}
+
+
+test-ufw-docker--service-allow-a-service-without-ports-published() {
+    @mocktrue grep -E '^[0-9]+(/(tcp|udp))?$'
+    @mock ufw-docker--get-service-id private-web === @stdout ""
+    @mock docker service inspect private-web \
+          --format '{{range .Endpoint.Spec.Ports}}{{.PublishedPort}} {{.TargetPort}}/{{.Protocol}}{{"\n"}}{{end}}' === @stdout ""
+
+    load-ufw-docker-function ufw-docker--service-allow
+    ufw-docker--service-allow private-web 80/tcp
+}
+test-ufw-docker--service-allow-a-service-without-ports-published-assert() {
+    @do-nothing
+    @fail
 }

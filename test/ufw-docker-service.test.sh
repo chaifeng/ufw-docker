@@ -166,3 +166,73 @@ test-ufw-docker--service-allow-a-service-without-ports-published-assert() {
     @do-nothing
     @fail
 }
+
+
+test-ufw-docker--service-allow-a-service-while-agent-not-running() {
+    @mocktrue grep -E '^[0-9]+(/(tcp|udp))?$'
+    @mock ufw-docker--get-service-id webapp === @stdout abcd1234
+    @mock ufw-docker--get-service-name webapp === @stdout webapp
+    @mock docker service inspect webapp \
+          --format '{{range .Endpoint.Spec.Ports}}{{.PublishedPort}} {{.TargetPort}}/{{.Protocol}}{{"\n"}}{{end}}' \
+          === @stdout "53 53/udp" "80 80/tcp" "8080 8080/tcp"
+    @mockfalse docker service inspect ufw-docker-agent
+
+    load-ufw-docker-function ufw-docker--service-allow
+    ufw-docker--service-allow webapp 80/tcp
+}
+test-ufw-docker--service-allow-a-service-while-agent-not-running-assert() {
+    docker service create --name ufw-docker-agent --mode global \
+           --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock \
+           --mount type=bind,source=/etc/ufw,target=/etc/ufw,readonly=true \
+           --env ufw_docker_agent_image="chaifeng/ufw-docker-agent:181005" \
+           --env DEBUG="false" \
+           --env "ufw_public_abcd1234=webapp/80/tcp" \
+           "chaifeng/ufw-docker-agent:181005"
+}
+
+
+test-ufw-docker--service-allow-a-service-add-new-env() {
+    @mocktrue grep -E '^[0-9]+(/(tcp|udp))?$'
+    @mock ufw-docker--get-service-id webapp === @stdout abcd1234
+    @mock ufw-docker--get-service-name webapp === @stdout webapp
+    @mock docker service inspect webapp \
+          --format '{{range .Endpoint.Spec.Ports}}{{.PublishedPort}} {{.TargetPort}}/{{.Protocol}}{{"\n"}}{{end}}' \
+          === @stdout "53 53/udp" "80 80/tcp" "8080 8080/tcp"
+    @mocktrue docker service inspect ufw-docker-agent
+    @mock ufw-docker--get-env-list === @stdout "abcd1234 webapp/80/tcp"
+
+    load-ufw-docker-function ufw-docker--service-allow
+    ufw-docker--service-allow webapp 80/tcp
+}
+test-ufw-docker--service-allow-a-service-add-new-env-assert() {
+    docker service update --update-parallelism=0 \
+           --env-add ufw_docker_agent_image="chaifeng/ufw-docker-agent:181005" \
+           --env-add DEBUG="false" \
+           --env-add "ufw_public_abcd1234=webapp/80/tcp" \
+           --image "chaifeng/ufw-docker-agent:181005" \
+           ufw-docker-agent
+}
+
+
+test-ufw-docker--service-allow-a-service-update-a-env() {
+    @mocktrue grep -E '^[0-9]+(/(tcp|udp))?$'
+    @mock ufw-docker--get-service-id webapp === @stdout abcd1234
+    @mock ufw-docker--get-service-name webapp === @stdout webapp
+    @mock docker service inspect webapp \
+          --format '{{range .Endpoint.Spec.Ports}}{{.PublishedPort}} {{.TargetPort}}/{{.Protocol}}{{"\n"}}{{end}}' \
+          === @stdout "53 53/udp" "80 80/tcp" "8080 8080/tcp"
+    @mocktrue docker service inspect ufw-docker-agent
+    @mock ufw-docker--get-env-list === @stdout "a_different_id webapp/80/tcp"
+
+    load-ufw-docker-function ufw-docker--service-allow
+    ufw-docker--service-allow webapp 80/tcp
+}
+test-ufw-docker--service-allow-a-service-update-a-env-assert() {
+    docker service update --update-parallelism=0 \
+           --env-add ufw_docker_agent_image="chaifeng/ufw-docker-agent:181005" \
+           --env-add DEBUG="false" \
+           --env-add "ufw_public_abcd1234=webapp/80/tcp" \
+           --env-rm "ufw_public_a_different_id" \
+           --image "chaifeng/ufw-docker-agent:181005" \
+           ufw-docker-agent
+}

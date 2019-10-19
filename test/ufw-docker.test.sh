@@ -13,6 +13,8 @@ source "$working_dir"/bach/bach.sh
     @mocktrue grep -Fq "Status: active"
 
     @ignore remove_blank_lines
+    @ignore echo
+    @ignore err
 
     DEFAULT_PROTO=tcp
 }
@@ -23,6 +25,7 @@ function ufw-docker() {
 
 function load-ufw-docker-function() {
     set -euo pipefail
+
     @load_function "$working_dir/../ufw-docker" "$1"
 }
 
@@ -243,7 +246,7 @@ test-ufw-docker--allow-instance-but-the-port-not-match() {
     ufw-docker--allow instance-name 80 tcp
 }
 test-ufw-docker--allow-instance-but-the-port-not-match-assert() {
-    err 'Fail to add rule(s), cannot find the published port 80/tcp of instance "instance-name" or cannot update outdated rule(s).'
+    @do-nothing
     @fail
 }
 
@@ -254,7 +257,7 @@ test-ufw-docker--allow-instance-but-the-proto-not-match() {
     ufw-docker--allow instance-name 5353 tcp
 }
 test-ufw-docker--allow-instance-but-the-proto-not-match-assert() {
-    err 'Fail to add rule(s), cannot find the published port 5353/tcp of instance "instance-name" or cannot update outdated rule(s).'
+    @do-nothing
     @fail
 }
 
@@ -296,9 +299,6 @@ test-ufw-docker--allow-instance-all-published-tcp-port-assert() {
 test-ufw-docker--add-rule-a-non-existing-rule() {
     @mockfalse ufw-docker--list webapp 5000 tcp
 
-    @ignore echo
-    @ignore err
-
     load-ufw-docker-function ufw-docker--add-rule
     ufw-docker--add-rule webapp 172.18.0.4 5000 tcp
 }
@@ -312,14 +312,12 @@ test-ufw-docker--add-rule-modify-an-existing-rule() {
     @mocktrue ufw --dry-run route allow proto tcp from any to 172.18.0.4 port 5000 comment "allow webapp 5000/tcp"
     @mockfalse grep "^Skipping"
 
-    @ignore echo
-    @ignore err
-
     load-ufw-docker-function ufw-docker--add-rule
     ufw-docker--add-rule webapp 172.18.0.4 5000 tcp
 }
 test-ufw-docker--add-rule-modify-an-existing-rule-assert() {
     ufw-docker--delete webapp 5000 tcp
+
     ufw route allow proto tcp from any to 172.18.0.4 port 5000 comment "allow webapp 5000/tcp"
 }
 
@@ -329,12 +327,26 @@ test-ufw-docker--add-rule-skip-an-existing-rule() {
     @mocktrue ufw --dry-run route allow proto tcp from any to 172.18.0.4 port 5000 comment "allow webapp 5000/tcp"
     @mocktrue grep "^Skipping"
 
-    @ignore echo
-    @ignore err
-
     load-ufw-docker-function ufw-docker--add-rule
     ufw-docker--add-rule webapp 172.18.0.4 5000 tcp
 }
 test-ufw-docker--add-rule-skip-an-existing-rule-assert() {
     @do-nothing
+}
+
+
+test-ufw-docker--add-rule-modify-an-existing-rule-without-port() {
+    @mocktrue ufw-docker--list webapp "" tcp
+
+    @mocktrue ufw --dry-run route allow proto tcp from any to 172.18.0.4 comment "allow webapp"
+    @mockfalse grep "^Skipping"
+
+    load-ufw-docker-function ufw-docker--add-rule
+
+    ufw-docker--add-rule webapp 172.18.0.4 "" tcp
+}
+test-ufw-docker--add-rule-modify-an-existing-rule-without-port-assert() {
+    ufw-docker--delete webapp "" tcp
+
+    ufw route allow proto tcp from any to 172.18.0.4 comment "allow webapp"
 }

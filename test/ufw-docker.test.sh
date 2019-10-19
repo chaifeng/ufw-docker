@@ -17,6 +17,7 @@ source "$working_dir"/bach/bach.sh
     @ignore err
 
     DEFAULT_PROTO=tcp
+    GREP_REGEXP_INSTANCE_NAME="[-_.[:alnum:]]\\+"
 }
 
 function ufw-docker() {
@@ -349,4 +350,33 @@ test-ufw-docker--add-rule-modify-an-existing-rule-without-port-assert() {
     ufw-docker--delete webapp "" tcp
 
     ufw route allow proto tcp from any to 172.18.0.4 comment "allow webapp"
+}
+
+
+test-ufw-docker--instance-name-found-a-name() {
+    @mock docker inspect --format="{{.Name}}" foo
+    @mock sed -e 's,^/,,'
+    @mockfalse grep "^$GREP_REGEXP_INSTANCE_NAME\$"
+
+    @mock echo -n foo
+
+    load-ufw-docker-function ufw-docker--instance-name
+    ufw-docker--instance-name foo
+}
+test-ufw-docker--instance-name-found-a-name-assert() {
+    docker inspect --format="{{.Name}}" foo
+    echo -n foo
+}
+
+
+test-ufw-docker--instance-name-found-an-id() {
+    @mock docker inspect --format="{{.Name}}" fooid
+    @mock sed -e 's,^/,,'
+    @mockfalse grep "^$GREP_REGEXP_INSTANCE_NAME\$"
+
+    load-ufw-docker-function ufw-docker--instance-name
+    ufw-docker--instance-name fooid
+}
+test-ufw-docker--instance-name-found-an-id-assert() {
+    docker inspect --format="{{.Name}}" fooid
 }

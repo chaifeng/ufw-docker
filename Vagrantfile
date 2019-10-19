@@ -57,6 +57,7 @@ Vagrant.configure('2') do |config|
 
     master.vm.provision "unit-testing", type: 'shell', inline: <<-SHELL
         /vagrant/test/ufw-docker.test.sh
+        /vagrant/test/ufw-docker-service.test.sh
     SHELL
 
     master.vm.provision "docker-registry", type: 'docker' do |d|

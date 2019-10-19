@@ -430,3 +430,29 @@ test-ufw-docker--list-number() {
 test-ufw-docker--list-number-assert() {
     sed -e 's/^\[[[:blank:]]*\([[:digit:]]\+\)\].*/\1/'
 }
+
+
+test-ufw-docker--delete-empty-result() {
+    @mock ufw-docker--list-number webapp 80 tcp === @stdout ""
+    @mock sort -rn
+
+    load-ufw-docker-function ufw-docker--delete
+    ufw-docker--delete webapp 80 tcp
+}
+test-ufw-docker--delete-empty-result-assert() {
+    @do-nothing
+}
+
+
+test-ufw-docker--delete-all() {
+    @mock ufw-docker--list-number webapp 80 tcp === @stdout 5 8 9
+    @mock sort -rn
+
+    load-ufw-docker-function ufw-docker--delete
+    ufw-docker--delete webapp 80 tcp
+}
+test-ufw-docker--delete-all-assert() {
+    ufw delete 5
+    ufw delete 8
+    ufw delete 9
+}

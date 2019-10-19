@@ -18,6 +18,9 @@ source "$working_dir"/bach/bach.sh
 
     DEFAULT_PROTO=tcp
     GREP_REGEXP_INSTANCE_NAME="[-_.[:alnum:]]\\+"
+    DEBUG=false
+    ufw_docker_agent=ufw-docker-agent
+    ufw_docker_agent_image=chaifeng/ufw-docker-agent:181005
 }
 
 function die() {
@@ -151,7 +154,8 @@ test-ufw-docker--service-allow-an-non-existed-service-assert() {
 
 test-ufw-docker--service-allow-a-service-without-ports-published() {
     @mocktrue grep -E '^[0-9]+(/(tcp|udp))?$'
-    @mock ufw-docker--get-service-id private-web === @stdout ""
+    @mock ufw-docker--get-service-id private-web === @stdout abcd1234
+    @mock ufw-docker--get-service-name private-web === @stdout private-web
     @mock docker service inspect private-web \
           --format '{{range .Endpoint.Spec.Ports}}{{.PublishedPort}} {{.TargetPort}}/{{.Protocol}}{{"\n"}}{{end}}' === @stdout ""
 

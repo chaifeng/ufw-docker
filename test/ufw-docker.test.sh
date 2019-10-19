@@ -419,3 +419,14 @@ test-ufw-docker--list-name-80-udp() {
 test-ufw-docker--list-name-80-udp-assert() {
     grep "# allow foo\\( 80\\/udp\\)\\?\$"
 }
+
+
+test-ufw-docker--list-number() {
+    @mocktrue ufw-docker--list foo 53 udp
+
+    load-ufw-docker-function ufw-docker--list-number
+    ufw-docker--list-number foo 53 udp
+}
+test-ufw-docker--list-number-assert() {
+    sed -e 's/^\[[[:blank:]]*\([[:digit:]]\+\)\].*/\1/'
+}

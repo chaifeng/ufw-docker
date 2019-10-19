@@ -380,3 +380,42 @@ test-ufw-docker--instance-name-found-an-id() {
 test-ufw-docker--instance-name-found-an-id-assert() {
     docker inspect --format="{{.Name}}" fooid
 }
+
+
+test-ufw-docker--list-name() {
+    @mocktrue ufw status numbered
+    load-ufw-docker-function ufw-docker--list
+    ufw-docker--list foo
+}
+test-ufw-docker--list-name-assert() {
+    grep "# allow foo\\( [[:digit:]]\\+\\/\\(tcp\\|udp\\)\\)\\?\$"
+}
+
+test-ufw-docker--list-name-udp() {
+    @mocktrue ufw status numbered
+    load-ufw-docker-function ufw-docker--list
+    ufw-docker--list foo "" udp
+}
+test-ufw-docker--list-name-udp-assert() {
+    grep "# allow foo\\( [[:digit:]]\\+\\/\\(tcp\\|udp\\)\\)\\?\$"
+}
+
+
+test-ufw-docker--list-name-80() {
+    @mocktrue ufw status numbered
+    load-ufw-docker-function ufw-docker--list
+    ufw-docker--list foo 80
+}
+test-ufw-docker--list-name-80-assert() {
+    grep "# allow foo\\( 80\\/tcp\\)\\?\$"
+}
+
+
+test-ufw-docker--list-name-80-udp() {
+    @mocktrue ufw status numbered
+    load-ufw-docker-function ufw-docker--list
+    ufw-docker--list foo 80 udp
+}
+test-ufw-docker--list-name-80-udp-assert() {
+    grep "# allow foo\\( 80\\/udp\\)\\?\$"
+}

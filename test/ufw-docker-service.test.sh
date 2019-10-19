@@ -101,3 +101,21 @@ test-ufw-docker--service-delete-allow-webapp() {
 test-ufw-docker--service-delete-allow-webapp-assert() {
     ufw-docker--service-delete webapp
 }
+
+
+test-ufw-docker--get-service-id() {
+    load-ufw-docker-function ufw-docker--get-service-id
+    ufw-docker--get-service-id database
+}
+test-ufw-docker--get-service-id-assert() {
+    docker service inspect database --format "{{.ID}}"
+}
+
+
+test-ufw-docker--get-service-name() {
+    load-ufw-docker-function ufw-docker--get-service-name
+    ufw-docker--get-service-name database
+}
+test-ufw-docker--get-service-name-assert() {
+    docker service inspect database --format "{{.Spec.Name}}"
+}

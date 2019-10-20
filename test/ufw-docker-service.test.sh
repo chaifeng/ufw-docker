@@ -6,6 +6,9 @@ source "$working_dir"/bach/bach.sh
 
 @setup {
     set -euo pipefail
+
+    ufw_docker_agent=ufw-docker-agent
+    ufw_docker_agent_image=chaifeng/ufw-docker-agent:181005
 }
 
 @setup-test {
@@ -19,8 +22,6 @@ source "$working_dir"/bach/bach.sh
     DEFAULT_PROTO=tcp
     GREP_REGEXP_INSTANCE_NAME="[-_.[:alnum:]]\\+"
     DEBUG=false
-    ufw_docker_agent=ufw-docker-agent
-    ufw_docker_agent_image=chaifeng/ufw-docker-agent:181005
 }
 
 function die() {
@@ -258,4 +259,31 @@ test-ufw-docker--get-env-list() {
 }
 test-ufw-docker--get-env-list-assert() {
     @stdout "zv6esvmwnmmgnlauqn7m77jo4 webapp/9090/tcp"
+}
+
+
+test-ufw-docker--service-delete-no-matches() {
+    @mock ufw-docker--get-env-list === @stdout "ffff111 foo/80/tcp" "eeee2222 bar/53/udp"
+
+    load-ufw-docker-function ufw-docker--service-delete
+    ufw-docker--service-delete webapp
+}
+test-ufw-docker--service-delete-no-matches-assert() {
+    @do-nothing
+    @fail
+}
+
+
+test-ufw-docker--service-delete-matches() {
+    @mock ufw-docker--get-env-list === @stdout "ffff111 foo/80/tcp" "eeee2222 bar/53/udp" "abcd1234 webapp/5000/tcp"
+
+    load-ufw-docker-function ufw-docker--service-delete
+    ufw-docker--service-delete webapp
+}
+test-ufw-docker--service-delete-matches-assert() {
+    docker service update --update-parallelism=0 \
+           --env-add ufw_docker_agent_image="${ufw_docker_agent_image}" \
+           --env-add "ufw_public_abcd1234=webapp/deny" \
+           --image "${ufw_docker_agent_image}" \
+           "${ufw_docker_agent}"
 }

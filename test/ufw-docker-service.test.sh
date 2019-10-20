@@ -236,3 +236,26 @@ test-ufw-docker--service-allow-a-service-update-a-env-assert() {
            --image "chaifeng/ufw-docker-agent:181005" \
            ufw-docker-agent
 }
+
+
+test-ufw-docker--get-env-list() {
+    @mock docker service inspect ufw-docker-agent \
+          --format '{{range $k,$v := .Spec.TaskTemplate.ContainerSpec.Env}}{{ $v }}{{"\n"}}{{end}}' \
+          === @stdout \
+              "ufw_docker_agent_image=192.168.56.130:5000/chaifeng/ufw-docker-agent:test" \
+              "DEBUG=true" \
+              "ufw_public_zv6esvmwnmmgnlauqn7m77jo4=webapp/9090/tcp" \
+              "OTHER_ENV=blabla"
+
+    @mock sed -e '/^ufw_public_/!d' \
+              -e 's/^ufw_public_//' \
+              -e 's/=/ /' === @real sed -e '/^ufw_public_/!d' \
+                                        -e 's/^ufw_public_//' \
+                                        -e 's/=/ /'
+
+    load-ufw-docker-function ufw-docker--get-env-list
+    ufw-docker--get-env-list
+}
+test-ufw-docker--get-env-list-assert() {
+    @stdout "zv6esvmwnmmgnlauqn7m77jo4 webapp/9090/tcp"
+}

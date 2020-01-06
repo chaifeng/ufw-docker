@@ -1,0 +1,10 @@
+---
+kind: pipeline
+type: docker
+name: default
+
+steps:
+- name: Testing
+  image: ubuntu:bionic
+  commands:
+  - ./test.sh

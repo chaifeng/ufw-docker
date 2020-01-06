@@ -4,12 +4,8 @@ type: docker
 name: default
 
 steps:
-- name: Fetch Submodules
-  image: alpine/git
-  commands:
-  - git submodule update --recursive --depth=1 --remote
-
 - name: Testing
   image: ubuntu:bionic
   commands:
+  - git submodule update --recursive --depth=1 --remote
   - ./test.sh

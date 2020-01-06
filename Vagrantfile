@@ -5,7 +5,7 @@
 
 Vagrant.configure('2') do |config|
 
-  config.vm.box = "chaifeng/ubuntu-18.04-docker-19.03"
+  config.vm.box = "chaifeng/ubuntu-18.04-docker-19.03.3"
 
   config.vm.provider 'virtualbox' do |vb|
     vb.memory = '1024'
@@ -116,7 +116,7 @@ DOCKERFILE
             webapp="${name%:*}_webapp"
             port="${name#*:}"
             if docker inspect "$webapp" &>/dev/null; then docker stop "$webapp"; fi
-            docker run -d --rm --name "$webapp" \
+            docker run -d --restart unless-stopped --name "$webapp" \
                 -p "$port:80" --env name="$webapp" #{private_registry}/chaifeng/hostname-webapp
             sleep 1
         done
@@ -159,6 +159,7 @@ DOCKERFILE
 
     external.vm.provision "testing", type: 'shell', inline: <<-SHELL
         set -euo pipefail
+        set -x
         server="http://#{ip_prefix}.130"
         function test-webapp() { timeout 3 curl --silent "$@"; }
         test-webapp "$server:8080"

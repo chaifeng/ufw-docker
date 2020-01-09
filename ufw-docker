@@ -379,7 +379,7 @@ function die() {
     exit 1
 }
 
-if ! ufw status 2>/dev/null | grep -Fq "Status: active" ; then
+if ! eval "LANG=C ufw status 2>/dev/null | grep -Fq \"Status: active\"" ; then
     die "UFW is disabled or you are not root user."
 fi
 

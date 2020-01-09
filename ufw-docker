@@ -2,6 +2,9 @@
 set -euo pipefail
 [[ -n "${DEBUG:-}" ]] && set -x
 
+LANG=en_US.UTF-8
+LANGUAGE=en_US:
+LC_ALL=en_US.UTF-8
 PATH="/bin:/usr/bin:/sbin:/usr/sbin"
 
 GREP_REGEXP_INSTANCE_NAME="[-_.[:alnum:]]\\+"
@@ -379,7 +382,7 @@ function die() {
     exit 1
 }
 
-if ! eval "LANG=C ufw status 2>/dev/null | grep -Fq \"Status: active\"" ; then
+if ! ufw status 2>/dev/null | grep -Fq "Status: active" ; then
     die "UFW is disabled or you are not root user."
 fi
 

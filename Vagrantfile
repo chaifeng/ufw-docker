@@ -6,6 +6,7 @@
 Vagrant.configure('2') do |config|
 
   config.vm.box = "chaifeng/ubuntu-20.04-docker-19.03.11"
+  #config.vm.box = "chaifeng/ubuntu-16.04-docker-18.03"
 
   config.vm.provider 'virtualbox' do |vb|
     vb.memory = '1024'
@@ -112,10 +113,10 @@ DOCKERFILE
 
     master.vm.provision "local-webapp", type: 'shell', inline: <<-SHELL
         set -euo pipefail
-        for name in public:8080 local:8000; do
+        for name in public:18080 local:8000; do
             webapp="${name%:*}_webapp"
             port="${name#*:}"
-            if docker inspect "$webapp" &>/dev/null; then docker stop "$webapp"; fi
+            if docker inspect "$webapp" &>/dev/null; then docker rm -f "$webapp"; fi
             docker run -d --restart unless-stopped --name "$webapp" \
                 -p "$port:80" --env name="$webapp" #{private_registry}/chaifeng/hostname-webapp
             sleep 1
@@ -126,7 +127,7 @@ DOCKERFILE
 
     master.vm.provision "swarm-webapp", type: 'shell', inline: <<-SHELL
       set -euo pipefail
-        for name in public:9090 local:9000; do
+        for name in public:29090 local:9000; do
             webapp="${name%:*}_service"
             port="${name#*:}"
             if docker service inspect "$webapp" &>/dev/null; then docker service rm "$webapp"; fi
@@ -162,10 +163,10 @@ DOCKERFILE
         set -x
         server="http://#{ip_prefix}.130"
         function test-webapp() { timeout 3 curl --silent "$@"; }
-        test-webapp "$server:8080"
+        test-webapp "$server:18080"
         ! test-webapp "$server:8000"
 
-        test-webapp "$server:9090"
+        test-webapp "$server:29090"
         ! test-webapp "$server:9000"
 
         echo "====================="

@@ -72,13 +72,13 @@ Modify the UFW configuration file `/etc/ufw/after.rules` and add the following r
     :ufw-user-forward - [0:0]
     :ufw-docker-logging-deny - [0:0]
     :DOCKER-USER - [0:0]
+    -A DOCKER-USER -j ufw-user-forward
+
     -A DOCKER-USER -j RETURN -s 10.0.0.0/8
     -A DOCKER-USER -j RETURN -s 172.16.0.0/12
     -A DOCKER-USER -j RETURN -s 192.168.0.0/16
 
     -A DOCKER-USER -p udp -m udp --sport 53 --dport 1024:65535 -j RETURN
-
-    -A DOCKER-USER -j ufw-user-forward
 
     -A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 192.168.0.0/16
     -A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 10.0.0.0/8
@@ -128,6 +128,10 @@ The following rules allow the private networks to be able to visit each other. N
 The following rules allow UFW to manage whether the public networks are allowed to visit the services provided by the Docker container. So that we can manage all firewall rules in one place.
 
     -A DOCKER-USER -j ufw-user-forward
+
+For example, we want to block all outgoing connections from inside a container whose IP address is 172.17.0.9 which means to block this container to access internet or external networks. Using the following command:
+
+    ufw route deny from 172.17.0.9 to any
 
 The following rules block connection requests initiated by all public networks, but allow internal networks to access external networks. For TCP protocol, it prevents from actively establishing a TCP connection from public networks. For UDP protocol, all accesses to ports which is less then 32767 are blocked. Why is this port? Since the UDP protocol is stateless, it is not possible to block the handshake signal that initiates the connection request as TCP does. For GNU/Linux we can find the local port range in the file `/proc/sys/net/ipv4/ip_local_port_range`. The default range is `32768 60999`. When accessing a UDP protocol service from a running container, the local port will be randomly selected one from the port range, and the server will return the data to this random port. Therefore, we can assume that the listening port of the UDP protocol inside all containers are less then `32768`. This is the reason that we don't want public networks to access the UDP ports that less then `32768`.
 
@@ -376,13 +380,13 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
     :ufw-user-forward - [0:0]
     :ufw-docker-logging-deny - [0:0]
     :DOCKER-USER - [0:0]
+    -A DOCKER-USER -j ufw-user-forward
+
     -A DOCKER-USER -j RETURN -s 10.0.0.0/8
     -A DOCKER-USER -j RETURN -s 172.16.0.0/12
     -A DOCKER-USER -j RETURN -s 192.168.0.0/16
 
     -A DOCKER-USER -p udp -m udp --sport 53 --dport 1024:65535 -j RETURN
-
-    -A DOCKER-USER -j ufw-user-forward
 
     -A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 192.168.0.0/16
     -A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 10.0.0.0/8
@@ -432,6 +436,10 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 下面的规则是为了可以用 UFW 来管理外部网络是否允许访问 Docker 容器提供的服务，这样我们就可以在一个地方来管理防火墙的规则了。
 
     -A DOCKER-USER -j ufw-user-forward
+
+例如，我们要阻止一个 IP 地址为 172.17.0.9 的容器内的所有对外连接，也就是阻止该容器访问外部网络，使用下列命令
+
+    ufw route deny from 172.17.0.9 to any
 
 下面的规则阻止了所有外部网络发起的连接请求，但是允许内部网络访问外部网络。对于 TCP 协议，是阻止了从外部网络主动建立 TCP 连接。对于 UDP，是阻止了所有小余端口 `32767` 的访问。为什么是这个端口的？由于 UDP 协议是无状态的，无法像 TCP 那样阻止发起建立连接请求的握手信号。在 GNU/Linux 上查看文件 `/proc/sys/net/ipv4/ip_local_port_range` 可以看到发出 TCP/UDP 数据后，本地源端口的范围，默认为 `32768 60999`。当从一个运行的容器对外访问一个 UDP 协议的服务时，本地端口将会从这个端口范围里面随机选择一个，服务器将会把数据返回到这个随机端口上。所以，我们可以假定所有容器内部的 UDP 协议的监听端口都小余 `32768`，不允许外部网络主动连接小余 `32768` 的 UDP 端口。
 

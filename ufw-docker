@@ -276,7 +276,7 @@ function rm-on-exit() {
 }
 
 function on-exit() {
-  for file in "${files_to_be_deleted[@]}"; do
+  for file in "${files_to_be_deleted[@]:-}"; do
     [[ -f "$file" ]] && rm -r "$file"
   done
   files_to_be_deleted=()

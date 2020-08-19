@@ -2,7 +2,7 @@ To Fix The Docker and UFW Security Flaw Without Disabling Iptables
 ==================
 
 [![Build Status](https://travis-ci.org/chaifeng/ufw-docker.svg)](https://travis-ci.org/chaifeng/ufw-docker)
-![chaifeng/ufw-docker-agent](https://img.shields.io/docker/pulls/chaifeng/ufw-docker-agent)
+[![chaifeng/ufw-docker-agent](https://img.shields.io/docker/pulls/chaifeng/ufw-docker-agent)](https://hub.docker.com/r/chaifeng/ufw-docker-agent)
 
 - [English](#tldr)
 - [中文](#太长不想读)

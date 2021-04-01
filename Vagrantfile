@@ -5,7 +5,7 @@
 
 Vagrant.configure('2') do |config|
 
-  config.vm.box = "chaifeng/ubuntu-20.04-docker-19.03.11"
+  config.vm.box = "chaifeng/ubuntu-20.04-docker-19.03.13"
   #config.vm.box = "chaifeng/ubuntu-16.04-docker-18.03"
 
   config.vm.provider 'virtualbox' do |vb|

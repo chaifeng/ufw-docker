@@ -73,7 +73,7 @@ function ufw-docker--allow() {
             ITER=0
             for IP in "${INSTANCE_IP_ADDRESSES[@]}"; do
 	        INSTANCE_NETWORK="${INSTANCE_NETWORK_NAMES[$ITER]}"
-		ITER=$(expr $ITER + 1)
+		      ITER=$((ITER+1))
 	        if [[ -n "$NETWORK" ]] && [[ "$NETWORK" != "$INSTANCE_NETWORK" ]]; then
 		  continue
 		fi

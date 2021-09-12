@@ -143,7 +143,7 @@ test-ufw-docker-list-httpd() {
     ufw-docker list httpd
 }
 test-ufw-docker-list-httpd-assert() {
-    ufw-docker--list httpd-container-name "" tcp
+    ufw-docker--list httpd-container-name "" tcp ""
 }
 
 
@@ -152,7 +152,7 @@ test-ufw-docker-allow-httpd() {
     ufw-docker allow httpd
 }
 test-ufw-docker-allow-httpd-assert() {
-    ufw-docker--allow httpd-container-name "" tcp
+    ufw-docker--allow httpd-container-name "" tcp ""
 }
 
 
@@ -161,7 +161,7 @@ test-ufw-docker-allow-httpd-80() {
     ufw-docker allow httpd 80
 }
 test-ufw-docker-allow-httpd-80-assert() {
-    ufw-docker--allow httpd-container-name 80 tcp
+    ufw-docker--allow httpd-container-name 80 tcp ""
 }
 
 
@@ -170,7 +170,7 @@ test-ufw-docker-allow-httpd-80tcp() {
     ufw-docker allow httpd 80/tcp
 }
 test-ufw-docker-allow-httpd-80tcp-assert() {
-    ufw-docker--allow httpd-container-name 80 tcp
+    ufw-docker--allow httpd-container-name 80 tcp ""
 }
 
 
@@ -179,7 +179,7 @@ test-ufw-docker-allow-httpd-80udp() {
     ufw-docker allow httpd 80/udp
 }
 test-ufw-docker-allow-httpd-80udp-assert() {
-    ufw-docker--allow httpd-container-name 80 udp
+    ufw-docker--allow httpd-container-name 80 udp ""
 }
 
 
@@ -196,7 +196,7 @@ test-ufw-docker-list-httpd() {
     ufw-docker list httpd
 }
 test-ufw-docker-list-httpd-assert() {
-    ufw-docker--list httpd-container-name "" tcp
+    ufw-docker--list httpd-container-name "" tcp ""
 }
 
 
@@ -205,7 +205,7 @@ test-ufw-docker-delete-allow-httpd() {
     ufw-docker delete allow httpd
 }
 test-ufw-docker-delete-allow-httpd-assert() {
-    ufw-docker--delete httpd-container-name "" tcp
+    ufw-docker--delete httpd-container-name "" tcp ""
 }
 
 
@@ -223,6 +223,16 @@ function setup-ufw-docker--allow() {
 
     @mocktrue docker inspect instance-name
     @mock docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{"\n"}}{{end}}' instance-name === @stdout 172.18.0.3
+    @mock docker inspect --format='{{range $k, $v := .NetworkSettings.Networks}}{{printf "%s\n" $k}}{{end}}' instance-name === @stdout default
+    @mock docker inspect --format='{{range $p, $conf := .NetworkSettings.Ports}}{{with $conf}}{{$p}}{{"\n"}}{{end}}{{end}}' instance-name === @stdout 5000/tcp 8080/tcp 5353/udp
+}
+
+function setup-ufw-docker--allow--multinetwork() {
+    load-ufw-docker-function ufw-docker--allow
+
+    @mocktrue docker inspect instance-name
+    @mock docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{"\n"}}{{end}}' instance-name === @stdout 172.18.0.3 172.19.0.7
+    @mock docker inspect --format='{{range $k, $v := .NetworkSettings.Networks}}{{printf "%s\n" $k}}{{end}}' instance-name === @stdout default awesomenet
     @mock docker inspect --format='{{range $p, $conf := .NetworkSettings.Ports}}{{with $conf}}{{$p}}{{"\n"}}{{end}}{{end}}' instance-name === @stdout 5000/tcp 8080/tcp 5353/udp
 }
 
@@ -269,7 +279,7 @@ test-ufw-docker--allow-instance-and-match-the-port() {
     ufw-docker--allow instance-name 5000 tcp
 }
 test-ufw-docker--allow-instance-and-match-the-port-assert() {
-    ufw-docker--add-rule instance-name 172.18.0.3 5000 tcp
+    ufw-docker--add-rule instance-name 172.18.0.3 5000 tcp default
 }
 
 
@@ -279,9 +289,9 @@ test-ufw-docker--allow-instance-all-published-port() {
     ufw-docker--allow instance-name "" ""
 }
 test-ufw-docker--allow-instance-all-published-port-assert() {
-    ufw-docker--add-rule instance-name 172.18.0.3 5000 tcp
-    ufw-docker--add-rule instance-name 172.18.0.3 8080 tcp
-    ufw-docker--add-rule instance-name 172.18.0.3 5353 udp
+    ufw-docker--add-rule instance-name 172.18.0.3 5000 tcp default
+    ufw-docker--add-rule instance-name 172.18.0.3 8080 tcp default
+    ufw-docker--add-rule instance-name 172.18.0.3 5353 udp default
 }
 
 
@@ -291,45 +301,70 @@ test-ufw-docker--allow-instance-all-published-tcp-port() {
     ufw-docker--allow instance-name "" tcp
 }
 test-ufw-docker--allow-instance-all-published-tcp-port-assert() {
-    ufw-docker--add-rule instance-name 172.18.0.3 5000 tcp
-    ufw-docker--add-rule instance-name 172.18.0.3 8080 tcp
-    ufw-docker--add-rule instance-name 172.18.0.3 5353 udp # FIXME
+    ufw-docker--add-rule instance-name 172.18.0.3 5000 tcp default
+    ufw-docker--add-rule instance-name 172.18.0.3 8080 tcp default
+    ufw-docker--add-rule instance-name 172.18.0.3 5353 udp default # FIXME
 }
 
+
+test-ufw-docker--allow-instance-all-published-port-multinetwork() {
+    setup-ufw-docker--allow--multinetwork
+
+    ufw-docker--allow instance-name "" ""
+}
+test-ufw-docker--allow-instance-all-published-port-multinetwork-assert() {
+    ufw-docker--add-rule  instance-name  172.18.0.3  5000  tcp  default
+    ufw-docker--add-rule  instance-name  172.19.0.7  5000  tcp  awesomenet
+    ufw-docker--add-rule  instance-name  172.18.0.3  8080  tcp  default
+    ufw-docker--add-rule  instance-name  172.19.0.7  8080  tcp  awesomenet
+    ufw-docker--add-rule  instance-name  172.18.0.3  5353  udp  default
+    ufw-docker--add-rule  instance-name  172.19.0.7  5353  udp  awesomenet
+}
+
+test-ufw-docker--allow-instance-all-published-port-multinetwork-select-network() {
+    setup-ufw-docker--allow--multinetwork
+
+    ufw-docker--allow instance-name "" "" awesomenet
+}
+test-ufw-docker--allow-instance-all-published-port-multinetwork-select-network-assert() {
+    ufw-docker--add-rule  instance-name  172.19.0.7  5000  tcp  awesomenet
+    ufw-docker--add-rule  instance-name  172.19.0.7  8080  tcp  awesomenet
+    ufw-docker--add-rule  instance-name  172.19.0.7  5353  udp  awesomenet
+}
 
 test-ufw-docker--add-rule-a-non-existing-rule() {
-    @mockfalse ufw-docker--list webapp 5000 tcp
+    @mockfalse ufw-docker--list webapp 5000 tcp default
 
     load-ufw-docker-function ufw-docker--add-rule
-    ufw-docker--add-rule webapp 172.18.0.4 5000 tcp
+    ufw-docker--add-rule webapp 172.18.0.4 5000 tcp default
 }
 test-ufw-docker--add-rule-a-non-existing-rule-assert() {
-    ufw route allow proto tcp from any to 172.18.0.4 port 5000 comment "allow webapp 5000/tcp"
+    ufw route allow proto tcp from any to 172.18.0.4 port 5000 comment "allow webapp 5000/tcp default"
 }
 
 
 test-ufw-docker--add-rule-modify-an-existing-rule() {
-    @mocktrue ufw-docker--list webapp 5000 tcp
-    @mocktrue ufw --dry-run route allow proto tcp from any to 172.18.0.4 port 5000 comment "allow webapp 5000/tcp"
+    @mocktrue ufw-docker--list webapp 5000 tcp default
+    @mocktrue ufw --dry-run route allow proto tcp from any to 172.18.0.4 port 5000 comment "allow webapp 5000/tcp default"
     @mockfalse grep "^Skipping"
 
     load-ufw-docker-function ufw-docker--add-rule
-    ufw-docker--add-rule webapp 172.18.0.4 5000 tcp
+    ufw-docker--add-rule webapp 172.18.0.4 5000 tcp default
 }
 test-ufw-docker--add-rule-modify-an-existing-rule-assert() {
-    ufw-docker--delete webapp 5000 tcp
+    ufw-docker--delete webapp 5000 tcp default
 
-    ufw route allow proto tcp from any to 172.18.0.4 port 5000 comment "allow webapp 5000/tcp"
+    ufw route allow proto tcp from any to 172.18.0.4 port 5000 comment "allow webapp 5000/tcp default"
 }
 
 
 test-ufw-docker--add-rule-skip-an-existing-rule() {
-    @mocktrue ufw-docker--list webapp 5000 tcp
+    @mocktrue ufw-docker--list webapp 5000 tcp ""
     @mocktrue ufw --dry-run route allow proto tcp from any to 172.18.0.4 port 5000 comment "allow webapp 5000/tcp"
     @mocktrue grep "^Skipping"
 
     load-ufw-docker-function ufw-docker--add-rule
-    ufw-docker--add-rule webapp 172.18.0.4 5000 tcp
+    ufw-docker--add-rule webapp 172.18.0.4 5000 tcp ""
 }
 test-ufw-docker--add-rule-skip-an-existing-rule-assert() {
     @do-nothing
@@ -337,17 +372,17 @@ test-ufw-docker--add-rule-skip-an-existing-rule-assert() {
 
 
 test-ufw-docker--add-rule-modify-an-existing-rule-without-port() {
-    @mocktrue ufw-docker--list webapp "" tcp
+    @mocktrue ufw-docker--list webapp "" tcp ""
 
     @mocktrue ufw --dry-run route allow proto tcp from any to 172.18.0.4 comment "allow webapp"
     @mockfalse grep "^Skipping"
 
     load-ufw-docker-function ufw-docker--add-rule
 
-    ufw-docker--add-rule webapp 172.18.0.4 "" tcp
+    ufw-docker--add-rule webapp 172.18.0.4 "" tcp ""
 }
 test-ufw-docker--add-rule-modify-an-existing-rule-without-port-assert() {
-    ufw-docker--delete webapp "" tcp
+    ufw-docker--delete webapp "" tcp ""
 
     ufw route allow proto tcp from any to 172.18.0.4 comment "allow webapp"
 }
@@ -388,7 +423,7 @@ test-ufw-docker--list-name() {
     ufw-docker--list foo
 }
 test-ufw-docker--list-name-assert() {
-    grep "# allow foo\\( [[:digit:]]\\+\\/\\(tcp\\|udp\\)\\)\\?\$"
+    grep "# allow foo\\( [[:digit:]]\\+\\/\\(tcp\\|udp\\)\\)\\?\\( [[:graph:]]*\\)\\?\$"
 }
 
 test-ufw-docker--list-name-udp() {
@@ -397,7 +432,7 @@ test-ufw-docker--list-name-udp() {
     ufw-docker--list foo "" udp
 }
 test-ufw-docker--list-name-udp-assert() {
-    grep "# allow foo\\( [[:digit:]]\\+\\/\\(tcp\\|udp\\)\\)\\?\$"
+    grep "# allow foo\\( [[:digit:]]\\+\\/\\(tcp\\|udp\\)\\)\\?\\( [[:graph:]]*\\)\\?\$"
 }
 
 
@@ -407,7 +442,7 @@ test-ufw-docker--list-name-80() {
     ufw-docker--list foo 80
 }
 test-ufw-docker--list-name-80-assert() {
-    grep "# allow foo\\( 80\\/tcp\\)\\?\$"
+    grep "# allow foo\\( 80\\/tcp\\)\\?\\( [[:graph:]]*\\)\\?\$"
 }
 
 
@@ -417,7 +452,7 @@ test-ufw-docker--list-name-80-udp() {
     ufw-docker--list foo 80 udp
 }
 test-ufw-docker--list-name-80-udp-assert() {
-    grep "# allow foo\\( 80\\/udp\\)\\?\$"
+    grep "# allow foo\\( 80\\/udp\\)\\?\\( [[:graph:]]*\\)\\?\$"
 }
 
 

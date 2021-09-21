@@ -333,12 +333,22 @@ test-ufw-docker--allow-instance-all-published-port-multinetwork-select-network-a
 }
 
 test-ufw-docker--add-rule-a-non-existing-rule() {
+    @mockfalse ufw-docker--list webapp 5000 tcp ""
+
+    load-ufw-docker-function ufw-docker--add-rule
+    ufw-docker--add-rule webapp 172.18.0.4 5000 tcp
+}
+test-ufw-docker--add-rule-a-non-existing-rule-assert() {
+    ufw route allow proto tcp from any to 172.18.0.4 port 5000 comment "allow webapp 5000/tcp"
+}
+
+test-ufw-docker--add-rule-a-non-existing-rule-with-network() {
     @mockfalse ufw-docker--list webapp 5000 tcp default
 
     load-ufw-docker-function ufw-docker--add-rule
     ufw-docker--add-rule webapp 172.18.0.4 5000 tcp default
 }
-test-ufw-docker--add-rule-a-non-existing-rule-assert() {
+test-ufw-docker--add-rule-a-non-existing-rule-with-network-assert() {
     ufw route allow proto tcp from any to 172.18.0.4 port 5000 comment "allow webapp 5000/tcp default"
 }
 

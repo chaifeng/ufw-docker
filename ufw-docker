@@ -107,7 +107,7 @@ function ufw-docker--add-rule() {
     local INSTANCE_IP_ADDRESS="$2"
     local PORT="$3"
     local PROTO="$4"
-    local NETWORK="$5"
+    local NETWORK="${5:-}"
 
     declare comment
 

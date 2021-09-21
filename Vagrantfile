@@ -125,6 +125,29 @@ DOCKERFILE
         ufw-docker allow public_webapp
     SHELL
 
+    master.vm.provision "multiple-network", type: 'shell', inline: <<-SHELL
+      set -euo pipefail
+      if ! docker network ls | grep -F foo-internal; then
+          docker network create --internal foo-internal
+      fi
+      if ! docker network ls | grep -F bar-external; then
+          docker network create bar-external
+      fi
+
+      for app in internal-multinet-app:7000 public-multinet-app:17070; do
+          if ! docker inspect "${app%:*}" &>/dev/null; then
+              docker run -d --restart unless-stopped --name "${app%:*}" \
+                         -p "${app#*:}":80 --env name="${app}" \
+                         --network foo-internal \
+                         192.168.56.130:5000/chaifeng/hostname-webapp
+              docker network connect bar-external "${app%:*}"
+          fi
+      done
+
+      ufw-docker allow public-multinet-app 80 bar-external
+      ufw-docker allow internal-multinet-app 80 foo-internal
+    SHELL
+
     master.vm.provision "swarm-webapp", type: 'shell', inline: <<-SHELL
       set -euo pipefail
         for name in public:29090 local:9000; do
@@ -165,6 +188,9 @@ DOCKERFILE
         function test-webapp() { timeout 3 curl --silent "$@"; }
         test-webapp "$server:18080"
         ! test-webapp "$server:8000"
+
+        test-webapp "$server:17070" # multiple networks app
+        ! test-webapp "$server:7000" # internal multiple networks app
 
         test-webapp "$server:29090"
         ! test-webapp "$server:9000"

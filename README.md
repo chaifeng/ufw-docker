@@ -259,6 +259,10 @@ Expose the `443` port of the container `httpd` and the protocol is `tcp`
 
     ufw-docker allow httpd 443/tcp
 
+Expose the `443` port of the container `httpd` and the protocol is `tcp` and the network is `foobar-external-network` when the container `httpd` is attached to multiple networks
+
+    ufw-docker allow httpd 443/tcp foobar-external-network
+
 Expose all published ports of the container `httpd`
 
     ufw-docker allow httpd
@@ -562,6 +566,10 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 暴露容器 `httpd` 的 `443` 端口，且协议为 `tcp`
 
     ufw-docker allow httpd 443/tcp
+
+如果容器 `httpd` 绑定到多个网络上，暴露其 `443` 端口，协议为 `tcp`，网络为 `foobar-external-network`
+
+    ufw-docker allow httpd 443/tcp foobar-external-network
 
 把容器 `httpd` 的所有映射端口都暴露出来
 

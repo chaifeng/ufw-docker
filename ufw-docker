@@ -72,12 +72,11 @@ function ufw-docker--allow() {
         if [[ -z "$INSTANCE_PORT" || "$PORT_PROTO" = "${INSTANCE_PORT}/${PROTO}" ]]; then
             ITER=0
             for IP in "${INSTANCE_IP_ADDRESSES[@]}"; do
-	        INSTANCE_NETWORK="${INSTANCE_NETWORK_NAMES[$ITER]}"
-		      ITER=$((ITER+1))
-	        if [[ -n "$NETWORK" ]] && [[ "$NETWORK" != "$INSTANCE_NETWORK" ]]; then
-		  continue
-		fi
-	    
+	            INSTANCE_NETWORK="${INSTANCE_NETWORK_NAMES[$ITER]}"
+		        ITER=$((ITER+1))
+	            if [[ -n "$NETWORK" ]] && [[ "$NETWORK" != "$INSTANCE_NETWORK" ]]; then
+		            continue
+		        fi
                 ufw-docker--add-rule "$INSTANCE_NAME" "$IP" "${PORT_PROTO%/*}" "${PORT_PROTO#*/}" "${INSTANCE_NETWORK}"
                 RETVAL="$?"
             done

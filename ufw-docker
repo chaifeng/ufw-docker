@@ -72,11 +72,11 @@ function ufw-docker--allow() {
         if [[ -z "$INSTANCE_PORT" || "$PORT_PROTO" = "${INSTANCE_PORT}/${PROTO}" ]]; then
             ITER=0
             for IP in "${INSTANCE_IP_ADDRESSES[@]}"; do
-              INSTANCE_NETWORK="${INSTANCE_NETWORK_NAMES[$ITER]}"
-            ITER=$((ITER+1))
-              if [[ -n "$NETWORK" ]] && [[ "$NETWORK" != "$INSTANCE_NETWORK" ]]; then
-                continue
-            fi
+                INSTANCE_NETWORK="${INSTANCE_NETWORK_NAMES[$ITER]}"
+                ITER=$((ITER+1))
+                if [[ -n "$NETWORK" ]] && [[ "$NETWORK" != "$INSTANCE_NETWORK" ]]; then
+                    continue
+                fi
                 ufw-docker--add-rule "$INSTANCE_NAME" "$IP" "${PORT_PROTO%/*}" "${PORT_PROTO#*/}" "${INSTANCE_NETWORK}"
                 RETVAL="$?"
             done
@@ -280,34 +280,34 @@ function ufw-docker--raw-command() {
 after_rules="/etc/ufw/after.rules"
 
 function ufw-docker--check() {
-  err "\\n########## iptables -n -L DOCKER-USER ##########"
-  iptables -n -L DOCKER-USER
+    err "\\n########## iptables -n -L DOCKER-USER ##########"
+    iptables -n -L DOCKER-USER
 
-  err "\\n\\n########## diff $after_rules ##########"
-  ufw-docker--check-install && err "\\nCheck done."
+    err "\\n\\n########## diff $after_rules ##########"
+    ufw-docker--check-install && err "\\nCheck done."
 }
 
 declare -a files_to_be_deleted
 
 function rm-on-exit() {
-  [[ $# -gt 0 ]] && files_to_be_deleted+=("$@")
+    [[ $# -gt 0 ]] && files_to_be_deleted+=("$@")
 }
 
 function on-exit() {
-  for file in "${files_to_be_deleted[@]:-}"; do
-    [[ -f "$file" ]] && rm -r "$file"
-  done
-  files_to_be_deleted=()
+    for file in "${files_to_be_deleted[@]:-}"; do
+        [[ -f "$file" ]] && rm -r "$file"
+    done
+    files_to_be_deleted=()
 }
 
 trap on-exit EXIT INT TERM QUIT ABRT ERR
 
 function ufw-docker--check-install() {
-  after_rules_tmp="${after_rules_tmp:-$(mktemp)}"
-  rm-on-exit "$after_rules_tmp"
+    after_rules_tmp="${after_rules_tmp:-$(mktemp)}"
+    rm-on-exit "$after_rules_tmp"
 
-  sed "/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d" "$after_rules" > "$after_rules_tmp"
-  >> "${after_rules_tmp}" cat <<-\EOF
+    sed "/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d" "$after_rules" > "$after_rules_tmp"
+    >> "${after_rules_tmp}" cat <<-\EOF
 	# BEGIN UFW AND DOCKER
 	*filter
 	:ufw-user-forward - [0:0]
@@ -337,27 +337,27 @@ function ufw-docker--check-install() {
 	# END UFW AND DOCKER
 	EOF
 
-  diff -u --color=auto "$after_rules" "$after_rules_tmp"
+    diff -u --color=auto "$after_rules" "$after_rules_tmp"
 }
 
 function ufw-docker--install() {
-  if ! ufw-docker--check-install; then
-    local after_rules_bak
-    after_rules_bak="${after_rules}-ufw-docker~$(date '+%Y-%m-%d-%H%M%S')~"
-    err "\\nBacking up $after_rules to $after_rules_bak"
-    cp "$after_rules" "$after_rules_bak"
-    cat "$after_rules_tmp" > "$after_rules"
-    err "Please restart UFW service manually by using the following command:"
-    if type systemctl &>/dev/null; then
-      err "    sudo systemctl restart ufw"
-    else
-      err "    sudo service ufw restart"
+    if ! ufw-docker--check-install; then
+        local after_rules_bak
+        after_rules_bak="${after_rules}-ufw-docker~$(date '+%Y-%m-%d-%H%M%S')~"
+        err "\\nBacking up $after_rules to $after_rules_bak"
+        cp "$after_rules" "$after_rules_bak"
+        cat "$after_rules_tmp" > "$after_rules"
+        err "Please restart UFW service manually by using the following command:"
+        if type systemctl &>/dev/null; then
+            err "    sudo systemctl restart ufw"
+        else
+            err "    sudo service ufw restart"
+        fi
     fi
-  fi
 }
 
 function ufw-docker--help() {
-  cat <<-EOF >&2
+    cat <<-EOF >&2
 	Usage:
 	  ufw-docker <list|allow> [docker-instance-id-or-name [port[/tcp|/udp]] [network]]
 	  ufw-docker delete allow [docker-instance-id-or-name [port[/tcp|/udp]] [network]]

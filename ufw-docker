@@ -31,7 +31,7 @@ function ufw-docker--list() {
     if [[ -z "$NETWORK" ]]; then
        NETWORK="[[:graph:]]*"
     fi
-    
+
     ufw status numbered | grep "# allow ${INSTANCE_NAME}\\( ${INSTANCE_PORT}\\/${PROTO}\\)\\?\\( ${NETWORK}\\)\\?\$"
 }
 
@@ -437,9 +437,9 @@ case "$ufw_action" in
         if [[ "$INSTANCE_PORT" = */udp ]]; then
             PROTO=udp
         fi
-	shift || true
-	
-	NETWORK="${1:-}"	
+	      shift || true
+
+	      NETWORK="${1:-}"
 
         INSTANCE_PORT="${INSTANCE_PORT%/*}"
 

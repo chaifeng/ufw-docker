@@ -1,14 +1,15 @@
 FROM ubuntu:20.04
 
-ARG docker_version="19.03.12"
+ARG docker_version="20.10.17"
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends apt-transport-https \
-               ca-certificates curl software-properties-common gnupg dirmngr \
-    && apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 9DC858229FC7DD38854AE2D88D81803C0EBFCD88 \
-    && add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
-                          $(lsb_release -cs) stable" \
+    && apt-get install -y ca-certificates curl gnupg lsb-release \
+    && mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg]" \
+            "https://download.docker.com/linux/ubuntu" "$(lsb_release -cs) stable" \
+            | tee /etc/apt/sources.list.d/docker.list > /dev/null \
     && apt-get update \
     && apt-get install -y --no-install-recommends locales ufw \
     && ( apt-get install -y --no-install-recommends "docker-ce=5:${docker_version}~*" || \

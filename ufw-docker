@@ -42,7 +42,9 @@ function ufw-docker--list() {
        NETWORK="[[:graph:]]*"
     fi
 
-    ufw status numbered | grep "# allow ${INSTANCE_NAME}\\( ${INSTANCE_PORT}\\/${PROTO}\\)\\?\\( ${NETWORK}\\)\\?\$"
+    ufw status numbered | grep "# allow ${INSTANCE_NAME}\\( ${INSTANCE_PORT}\\/${PROTO}\\)\\( ${NETWORK}\\)\$" ||  \
+    ufw status numbered | grep "# allow ${INSTANCE_NAME}\\( ${INSTANCE_PORT}\\/${PROTO}\\)\$" || \
+    ufw status numbered | grep "# allow ${INSTANCE_NAME}\$"
 }
 
 function ufw-docker--list-number() {

@@ -7,7 +7,7 @@ ENV['VAGRANT_NO_PARALLEL']="true"
 
 Vagrant.configure('2') do |config|
 
-  config.vm.box = "chaifeng/ubuntu-20.04-docker-#{(`uname -m`.strip == "arm64")?"20.10.17-arm64":"19.03.13"}"
+  config.vm.box = "chaifeng/ubuntu-22.04-docker-#{(`uname -m`.strip == "arm64")?"20.10.17-arm64":"19.03.13"}"
   #config.vm.box = "chaifeng/ubuntu-16.04-docker-18.03"
 
   config.vm.provider 'virtualbox' do |vb|

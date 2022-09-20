@@ -7,8 +7,8 @@ ENV['VAGRANT_NO_PARALLEL']="true"
 
 Vagrant.configure('2') do |config|
 
-  #config.vm.box = "chaifeng/ubuntu-22.04-docker-#{(`uname -m`.strip == "arm64")?"20.10.17-arm64":"19.03.13"}"
-  config.vm.box = "chaifeng/ubuntu-20.04-docker-#{(`uname -m`.strip == "arm64")?"19.03.13-arm64":"19.03.13"}"
+  config.vm.box = "chaifeng/ubuntu-22.04-docker-#{(`uname -m`.strip == "arm64")?"20.10.17-arm64":"19.03.13"}"
+  #config.vm.box = "chaifeng/ubuntu-20.04-docker-#{(`uname -m`.strip == "arm64")?"19.03.13-arm64":"19.03.13"}"
 
   config.vm.provider 'virtualbox' do |vb|
     vb.memory = '1024'
@@ -85,10 +85,10 @@ Vagrant.configure('2') do |config|
 
     master.vm.provision "docker-build-ufw-docker-agent", preserve_order: true, type: 'shell', inline: <<-SHELL
       set -euo pipefail
-      docker build -t #{ufw_docker_agent_image}-legacy /vagrant
-      docker push #{ufw_docker_agent_image}-legacy
+      docker build -t #{ufw_docker_agent_image}-nf_tables /vagrant
+      docker push #{ufw_docker_agent_image}-nf_tables
 
-      echo "export UFW_DOCKER_AGENT_IMAGE=#{ufw_docker_agent_image}-nf_tables" > /etc/profile.d/ufw-docker.sh
+      echo "export UFW_DOCKER_AGENT_IMAGE=#{ufw_docker_agent_image}-legacy" > /etc/profile.d/ufw-docker.sh
       echo "export DEBUG=true" >> /etc/profile.d/ufw-docker.sh
 
       echo "Defaults env_keep += UFW_DOCKER_AGENT_IMAGE" > /etc/sudoers.d/98_ufw-docker

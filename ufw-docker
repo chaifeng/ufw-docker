@@ -11,7 +11,17 @@ GREP_REGEXP_INSTANCE_NAME="[-_.[:alnum:]]\\+"
 DEFAULT_PROTO=tcp
 
 ufw_docker_agent=ufw-docker-agent
-ufw_docker_agent_image="${UFW_DOCKER_AGENT_IMAGE:-chaifeng/${ufw_docker_agent}:210925}"
+ufw_docker_agent_image="${UFW_DOCKER_AGENT_IMAGE:-chaifeng/${ufw_docker_agent}:220920-legacy}"
+
+if [[ "${ufw_docker_agent_image}" = *-@(legacy|nf_tables) ]]; then
+    if iptables --version | grep -F '(legacy)' &>/dev/null; then
+        ufw_docker_agent_image="${ufw_docker_agent_image%-*}-legacy"
+    else
+        ufw_docker_agent_image="${ufw_docker_agent_image%-*}-nf_tables"
+    fi
+fi
+
+test -n "$ufw_docker_agent_image"
 
 function ufw-docker--status() {
     ufw-docker--list "$GREP_REGEXP_INSTANCE_NAME"
@@ -409,7 +419,7 @@ function die() {
 # __main__
 
 if ! ufw status 2>/dev/null | grep -Fq "Status: active" ; then
-    die "UFW is disabled or you are not root user."
+    die "UFW is disabled or you are not root user, or mismatched iptables legacy/nf_tables, current $(iptables --version)"
 fi
 
 ufw_action="${1:-help}"

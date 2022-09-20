@@ -12,12 +12,17 @@ source "$working_dir"/bach/bach.sh
     @mocktrue ufw status
     @mocktrue grep -Fq "Status: active"
 
+    @mock iptables --version
+    @mocktrue grep -F '(legacy)'
+
     @ignore remove_blank_lines
     @ignore echo
     @ignore err
 
     DEFAULT_PROTO=tcp
     GREP_REGEXP_INSTANCE_NAME="[-_.[:alnum:]]\\+"
+
+    UFW_DOCKER_AGENT_IMAGE=chaifeng/ufw-docker-agent:090502-legacy
 }
 
 function ufw-docker() {
@@ -29,6 +34,41 @@ function load-ufw-docker-function() {
 
     @load_function "$working_dir/../ufw-docker" "$1"
 }
+
+test-ufw-docker-init-legacy() {
+    @mocktrue grep -F '(legacy)'
+    @source <(@sed '/PATH=/d' "$working_dir/../ufw-docker") help
+}
+test-ufw-docker-init-legacy-assert() {
+    iptables --version
+    test -n chaifeng/ufw-docker-agent:090502-legacy
+    trap on-exit EXIT INT TERM QUIT ABRT ERR
+    @dryrun cat
+}
+
+
+test-ufw-docker-init-nf_tables() {
+    @mockfalse grep -F '(legacy)'
+    @source <(@sed '/PATH=/d' "$working_dir/../ufw-docker") help
+}
+test-ufw-docker-init-nf_tables-assert() {
+    iptables --version
+    test -n chaifeng/ufw-docker-agent:090502-nf_tables
+    trap on-exit EXIT INT TERM QUIT ABRT ERR
+    @dryrun cat
+}
+
+
+test-ufw-docker-init() {
+    UFW_DOCKER_AGENT_IMAGE=chaifeng/ufw-docker-agent:100917
+    @source <(@sed '/PATH=/d' "$working_dir/../ufw-docker") help
+}
+test-ufw-docker-init-assert() {
+    test -n chaifeng/ufw-docker-agent:100917
+    trap on-exit EXIT INT TERM QUIT ABRT ERR
+    @dryrun cat
+}
+
 
 test-ufw-docker-help() {
     ufw-docker help
@@ -48,11 +88,12 @@ test-ufw-docker-without-parameters-assert() {
 
 test-ufw-is-disabled() {
     @mockfalse grep -Fq "Status: active"
+    @mock iptables --version === @stdout 'iptables v1.8.4 (legacy)'
 
     ufw-docker
 }
 test-ufw-is-disabled-assert() {
-    die "UFW is disabled or you are not root user."
+    die "UFW is disabled or you are not root user, or mismatched iptables legacy/nf_tables, current iptables v1.8.4 (legacy)"
     ufw-docker--help
 }
 

@@ -167,6 +167,18 @@ DOCKERFILE
         done
 
         ufw-docker service allow public_service 80/tcp
+
+        for name in public_multiport; do
+            webapp="${name}_service"
+            port_1="23080"
+            port_2="23443"
+            if docker service inspect "$webapp" &>/dev/null; then docker service rm "$webapp"; fi
+            docker service create --name "$webapp" \
+                -p "${port_1}:80" -p "${port_2}:443" --env name="$webapp" --replicas 3 #{private_registry}/chaifeng/hostname-webapp
+        done
+
+        ufw-docker service allow public_multiport 443/tcp
+        ufw-docker service allow public_multiport 80/tcp
     SHELL
   end
 
@@ -202,6 +214,9 @@ DOCKERFILE
 
         test-webapp "$server:29090"
         ! test-webapp "$server:9000"
+
+        test-webapp "$server:23080"
+        test-webapp "$server:23443"
 
         echo "====================="
         echo "      TEST DONE      "

@@ -474,7 +474,7 @@ test-ufw-docker--list-name() {
     ufw-docker--list foo
 }
 test-ufw-docker--list-name-assert() {
-    grep "# allow foo\\( [[:digit:]]\\+\\/\\(tcp\\|udp\\)\\)\\?\\( [[:graph:]]*\\)\\?\$"
+    grep "# allow foo\\( [[:digit:]]\\+\\/\\(tcp\\|udp\\)\\)\\( [[:graph:]]*\\)\$"
 }
 
 test-ufw-docker--list-name-udp() {
@@ -483,7 +483,7 @@ test-ufw-docker--list-name-udp() {
     ufw-docker--list foo "" udp
 }
 test-ufw-docker--list-name-udp-assert() {
-    grep "# allow foo\\( [[:digit:]]\\+\\/\\(tcp\\|udp\\)\\)\\?\\( [[:graph:]]*\\)\\?\$"
+    grep "# allow foo\\( [[:digit:]]\\+\\/\\(tcp\\|udp\\)\\)\\( [[:graph:]]*\\)\$"
 }
 
 
@@ -493,7 +493,7 @@ test-ufw-docker--list-name-80() {
     ufw-docker--list foo 80
 }
 test-ufw-docker--list-name-80-assert() {
-    grep "# allow foo\\( 80\\/tcp\\)\\?\\( [[:graph:]]*\\)\\?\$"
+    grep "# allow foo\\( 80\\/tcp\\)\\( [[:graph:]]*\\)\$"
 }
 
 
@@ -503,7 +503,7 @@ test-ufw-docker--list-name-80-udp() {
     ufw-docker--list foo 80 udp
 }
 test-ufw-docker--list-name-80-udp-assert() {
-    grep "# allow foo\\( 80\\/udp\\)\\?\\( [[:graph:]]*\\)\\?\$"
+    grep "# allow foo\\( 80\\/udp\\)\\( [[:graph:]]*\\)\$"
 }
 
 

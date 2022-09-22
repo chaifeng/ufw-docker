@@ -507,6 +507,29 @@ test-ufw-docker--list-name-80-udp-assert() {
 }
 
 
+test-ufw-docker--list-grep-without-network() {
+    @mocktrue ufw status numbered
+    @mockfalse grep "# allow foo\\( 80\\/udp\\)\\( [[:graph:]]*\\)\$"
+    load-ufw-docker-function ufw-docker--list
+    ufw-docker--list foo 80 udp
+}
+test-ufw-docker--list-grep-without-network-assert() {
+    grep "# allow foo\\( 80\\/udp\\)\$"
+}
+
+
+test-ufw-docker--list-grep-without-network-and-port() {
+    @mocktrue ufw status numbered
+    @mockfalse grep "# allow foo\\( 80\\/udp\\)\\( [[:graph:]]*\\)\$"
+    @mockfalse grep "# allow foo\\( 80\\/udp\\)\$"
+    load-ufw-docker-function ufw-docker--list
+    ufw-docker--list foo 80 udp
+}
+test-ufw-docker--list-grep-without-network-and-port-assert() {
+    grep "# allow foo\$"
+}
+
+
 test-ufw-docker--list-number() {
     @mocktrue ufw-docker--list foo 53 udp
 

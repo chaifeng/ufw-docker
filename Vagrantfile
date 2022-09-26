@@ -7,8 +7,8 @@ ENV['VAGRANT_NO_PARALLEL']="true"
 
 Vagrant.configure('2') do |config|
 
-  config.vm.box = "chaifeng/ubuntu-22.04-docker-#{(`uname -m`.strip == "arm64")?"20.10.17-arm64":"19.03.13"}"
-  #config.vm.box = "chaifeng/ubuntu-20.04-docker-#{(`uname -m`.strip == "arm64")?"19.03.13-arm64":"19.03.13"}"
+  config.vm.box = "chaifeng/ubuntu-22.04-docker-20.10.17#{(`uname -m`.strip == "arm64")?"-arm64":""}"
+  #config.vm.box = "chaifeng/ubuntu-20.04-docker-20.10.17#{(`uname -m`.strip == "arm64")?"-arm64":""}"
 
   config.vm.provider 'virtualbox' do |vb|
     vb.memory = '1024'
@@ -81,14 +81,15 @@ Vagrant.configure('2') do |config|
             daemonize: true
     end
 
-    ufw_docker_agent_image = "#{private_registry}/chaifeng/ufw-docker-agent:test"
+    ufw_docker_agent_image = "#{private_registry}/chaifeng/ufw-docker-agent:test-legacy"
 
     master.vm.provision "docker-build-ufw-docker-agent", preserve_order: true, type: 'shell', inline: <<-SHELL
       set -euo pipefail
-      docker build -t #{ufw_docker_agent_image}-nf_tables /vagrant
-      docker push #{ufw_docker_agent_image}-nf_tables
+      suffix="$(iptables --version | grep -o '\\(nf_tables\\|legacy\\)')"
+      docker build -t "#{ufw_docker_agent_image}-${suffix}" /vagrant
+      docker push "#{ufw_docker_agent_image}-${suffix}"
 
-      echo "export UFW_DOCKER_AGENT_IMAGE=#{ufw_docker_agent_image}-legacy" > /etc/profile.d/ufw-docker.sh
+      echo "export UFW_DOCKER_AGENT_IMAGE=#{ufw_docker_agent_image}-${suffix}" > /etc/profile.d/ufw-docker.sh
       echo "export DEBUG=true" >> /etc/profile.d/ufw-docker.sh
 
       echo "Defaults env_keep += UFW_DOCKER_AGENT_IMAGE" > /etc/sudoers.d/98_ufw-docker
@@ -110,6 +111,8 @@ FROM httpd:alpine
 
 RUN { echo '#!/bin/sh'; \\
     echo 'set -e; (echo -n "${name:-Hi} "; hostname;) > /usr/local/apache2/htdocs/index.html'; \\
+    echo 'grep "^Listen 7000" || echo Listen 7000 >> /usr/local/apache2/conf/httpd.conf'; \\
+    echo 'grep "^Listen 8080" || echo Listen 8080 >> /usr/local/apache2/conf/httpd.conf'; \\
     echo 'exec "$@"'; \\
     } > /entrypoint.sh; chmod +x /entrypoint.sh
 
@@ -168,17 +171,12 @@ DOCKERFILE
 
         ufw-docker service allow public_service 80/tcp
 
-        for name in public_multiport; do
-            webapp="${name}_service"
-            port_1="23080"
-            port_2="23443"
-            if docker service inspect "$webapp" &>/dev/null; then docker service rm "$webapp"; fi
-            docker service create --name "$webapp" \
-                -p "${port_1}:80" -p "${port_2}:443" --env name="$webapp" --replicas 3 #{private_registry}/chaifeng/hostname-webapp
-        done
+        docker service create --name "public_multiport" \
+            --publish "40080:80" --publish "47000:7000" --publish "48080:8080" \
+            --env name="public_multiport" --replicas 3 #{private_registry}/chaifeng/hostname-webapp
 
-        ufw-docker service allow public_multiport 443/tcp
         ufw-docker service allow public_multiport 80/tcp
+        ufw-docker service allow public_multiport 8080/tcp
     SHELL
   end
 
@@ -205,7 +203,12 @@ DOCKERFILE
         set -euo pipefail
         set -x
         server="http://#{ip_prefix}.130"
-        function test-webapp() { timeout 3 curl --silent "$@"; }
+        function test-webapp() {
+          if timeout 3 curl --silent "$@"
+          then echo "Success: $*"
+          else echo "Cannot visit: $*"; return 1
+          fi
+        }
         test-webapp "$server:18080"
         ! test-webapp "$server:8000"
 
@@ -215,8 +218,9 @@ DOCKERFILE
         test-webapp "$server:29090"
         ! test-webapp "$server:9000"
 
-        test-webapp "$server:23080"
-        test-webapp "$server:23443"
+        test-webapp "$server:40080"
+        test-webapp "$server:48080"
+        ! test-webapp "$server:47000"
 
         echo "====================="
         echo "      TEST DONE      "

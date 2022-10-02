@@ -7,7 +7,14 @@ ENV['VAGRANT_NO_PARALLEL']="true"
 
 Vagrant.configure('2') do |config|
 
-  config.vm.box = "chaifeng/ubuntu-22.04-docker-20.10.17#{(`uname -m`.strip == "arm64")?"-arm64":""}"
+  docker_version = "20.10.17"
+
+  ubuntu_version = File.readlines("Dockerfile").filter { |line|
+    line.start_with?("FROM ")
+  }.first.match(/\d\d\.\d\d/)[0]
+
+  config.vm.box = "chaifeng/ubuntu-#{ubuntu_version}-docker-#{docker_version}#{(`uname -m`.strip == "arm64")?"-arm64":""}"
+
   #config.vm.box = "chaifeng/ubuntu-20.04-docker-20.10.17#{(`uname -m`.strip == "arm64")?"-arm64":""}"
 
   config.vm.provider 'virtualbox' do |vb|

@@ -15,6 +15,9 @@ source "$working_dir"/bach/bach.sh
     @mock iptables --version
     @mocktrue grep -F '(legacy)'
 
+    @mocktrue docker -v
+    @mock docker -v === @stdout Docker version 0.0.0, build dummy
+
     @ignore remove_blank_lines
     @ignore echo
     @ignore err

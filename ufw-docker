@@ -5,7 +5,7 @@ set -euo pipefail
 LANG=en_US.UTF-8
 LANGUAGE=en_US:
 LC_ALL=en_US.UTF-8
-PATH="/bin:/usr/bin:/sbin:/usr/sbin"
+PATH="/bin:/usr/bin:/sbin:/usr/sbin:/snap/bin/"
 
 GREP_REGEXP_INSTANCE_NAME="[-_.[:alnum:]]\\+"
 DEFAULT_PROTO=tcp
@@ -422,6 +422,10 @@ function die() {
 
 if ! ufw status 2>/dev/null | grep -Fq "Status: active" ; then
     die "UFW is disabled or you are not root user, or mismatched iptables legacy/nf_tables, current $(iptables --version)"
+fi
+
+if ! docker -v &> /dev/null; then
+  die "Docker executable not found."
 fi
 
 ufw_action="${1:-help}"

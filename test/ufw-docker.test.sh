@@ -101,6 +101,17 @@ test-ufw-is-disabled-assert() {
 }
 
 
+test-docker-is-installed() {
+    @mockfalse docker -v
+
+    ufw-docker
+}
+test-docker-is-installed-assert() {
+    die "Docker executable not found."
+    ufw-docker--help
+}
+
+
 test-ufw-docker-status() {
     ufw-docker status
 }

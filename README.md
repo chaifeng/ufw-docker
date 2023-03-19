@@ -193,6 +193,22 @@ Con:
 
 Doesn't support older versions of Ubuntu, and the command is a bit more complicated. But you can use my script.
 
+### IPv6
+
+[Enable IPv6 support](https://forums.docker.com/t/docker-user-chain-for-ip6tables/133961/3) in Docker by specifying ULA range (RFC 4193) in `/etc/docker/daemon.json` 
+```json
+{
+  "experimental": true,
+  "ipv6": true,
+  "ip6tables": true,
+  "fixed-cidr-v6": "fd00:dead:beef::/48"
+}
+```
+
+Restart Docker
+```shell
+systemctl restart docker
+```
 
 ### Conclusion
 

@@ -24,7 +24,7 @@ fi
 test -n "$ufw_docker_agent_image"
 
 function ufw-docker--status() {
-    ufw-docker--list "$GREP_REGEXP_INSTANCE_NAME"
+    ufw-docker--list "$GREP_REGEXP_INSTANCE_NAME" | uniq
 }
 
 function ufw-docker--list() {
@@ -42,13 +42,19 @@ function ufw-docker--list() {
        NETWORK="[[:graph:]]*"
     fi
 
+    # IPv4
     ufw status numbered | grep "# allow ${INSTANCE_NAME}\\( ${INSTANCE_PORT}\\/${PROTO}\\)\\( ${NETWORK}\\)\$" ||  \
     ufw status numbered | grep "# allow ${INSTANCE_NAME}\\( ${INSTANCE_PORT}\\/${PROTO}\\)\$" || \
     ufw status numbered | grep "# allow ${INSTANCE_NAME}\$"
+
+    # IPv6
+    ufw status numbered | grep "# allow ${INSTANCE_NAME}_IPv6\\( ${INSTANCE_PORT}\\/${PROTO}\\)\\( ${NETWORK}\\)\$" ||  \
+    ufw status numbered | grep "# allow ${INSTANCE_NAME}_IPv6\\( ${INSTANCE_PORT}\\/${PROTO}\\)\$" || \
+    ufw status numbered | grep "# allow ${INSTANCE_NAME}_IPv6\$"
 }
 
 function ufw-docker--list-number() {
-    ufw-docker--list "$@" | sed -e 's/^\[[[:blank:]]*\([[:digit:]]\+\)\].*/\1/'
+    ufw-docker--list "$@" | sed -e 's/^\[[[:blank:]]*\([[:digit:]]\+\)\].*/\1/' | uniq
 }
 
 function ufw-docker--delete() {
@@ -68,6 +74,7 @@ function ufw-docker--allow() {
         die "Docker instance \"$INSTANCE_NAME\" doesn't exist."
 
     mapfile -t INSTANCE_IP_ADDRESSES < <(docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{"\n"}}{{end}}' "$INSTANCE_NAME" 2>/dev/null | remove_blank_lines)
+    mapfile -t INSTANCE_IP_V6_ADDRESSES < <(docker inspect --format='{{range .NetworkSettings.Networks}}{{.GlobalIPv6Address}}{{"\n"}}{{end}}' "$INSTANCE_NAME" 2>/dev/null | remove_blank_lines)
 
     [[ -z "${INSTANCE_IP_ADDRESSES:-}" ]] && die "Could not find a running instance \"$INSTANCE_NAME\"."
 
@@ -90,6 +97,17 @@ function ufw-docker--allow() {
                     continue
                 fi
                 ufw-docker--add-rule "$INSTANCE_NAME" "$IP" "${PORT_PROTO%/*}" "${PORT_PROTO#*/}" "${INSTANCE_NETWORK}"
+                RETVAL="$?"
+            done
+
+            ITER_V6=0
+            for IP in "${INSTANCE_IP_V6_ADDRESSES[@]}"; do
+                INSTANCE_NETWORK="${INSTANCE_NETWORK_NAMES[$ITER_V6]}"
+                ITER_V6=$((ITER_V6+1))
+                if [[ -n "$NETWORK" ]] && [[ "$NETWORK" != "$INSTANCE_NETWORK" ]]; then
+                    continue
+                fi
+                ufw-docker--add-rule "${INSTANCE_NAME}_IPv6" "$IP" "${PORT_PROTO%/*}" "${PORT_PROTO#*/}" "${INSTANCE_NETWORK}"
                 RETVAL="$?"
             done
         fi
@@ -290,6 +308,7 @@ function ufw-docker--raw-command() {
 }
 
 after_rules="/etc/ufw/after.rules"
+after6_rules="/etc/ufw/after6.rules"
 
 function ufw-docker--check() {
     err "\\n########## iptables -n -L DOCKER-USER ##########"
@@ -297,6 +316,12 @@ function ufw-docker--check() {
 
     err "\\n\\n########## diff $after_rules ##########"
     ufw-docker--check-install && err "\\nCheck done."
+
+    err "\\n########## ip6tables -n -L DOCKER-USER ##########"
+    ip6tables -n -L DOCKER-USER
+
+    err "\\n\\n########## diff $after6_rules ##########"
+    ufw-docker--check-install_ipv6 && err "\\nCheck IPv6 done."
 }
 
 declare -a files_to_be_deleted
@@ -352,6 +377,43 @@ function ufw-docker--check-install() {
     diff -u --color=auto "$after_rules" "$after_rules_tmp"
 }
 
+function ufw-docker--check-install_ipv6() {
+    DOCKER_IPV6_NETWORK=$(sed -En 's/.*"fixed-cidr-v6":.?"([^"]*).*/\1/p' /etc/docker/daemon.json)
+    [[ -z "${DOCKER_IPV6_NETWORK:-}" ]] && die "Could not find \"fixed-cidr-v6\" in \"/etc/docker/daemon.json\"."
+
+    after6_rules_tmp="${after6_rules_tmp:-$(mktemp)}"
+    rm-on-exit "$after6_rules_tmp"
+
+    sed "/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d" "$after6_rules" > "$after6_rules_tmp"
+    >> "${after6_rules_tmp}" cat <<-\EOF
+	# BEGIN UFW AND DOCKER
+	*filter
+	:ufw6-user-forward - [0:0]
+	:ufw6-docker-logging-deny - [0:0]
+	:DOCKER-USER - [0:0]
+	-A DOCKER-USER -j ufw6-user-forward
+
+	-A DOCKER-USER -j RETURN -s {DOCKER_IPV6_NETWORK}
+
+	-A DOCKER-USER -p udp -m udp --sport 53 --dport 1024:65535 -j RETURN
+
+	-A DOCKER-USER -j ufw6-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d {DOCKER_IPV6_NETWORK}
+	-A DOCKER-USER -j ufw6-docker-logging-deny -p udp -m udp --dport 0:32767 -d {DOCKER_IPV6_NETWORK}
+
+	-A DOCKER-USER -j RETURN
+
+	-A ufw6-docker-logging-deny -m limit --limit 3/min --limit-burst 10 -j LOG --log-prefix "[UFW DOCKER BLOCK] "
+	-A ufw6-docker-logging-deny -j DROP
+
+	COMMIT
+	# END UFW AND DOCKER
+	EOF
+
+    sed -i "s/{DOCKER_IPV6_NETWORK}/${DOCKER_IPV6_NETWORK/\//\\/}/g" "$after6_rules_tmp"
+
+    diff -u --color=auto "$after6_rules" "$after6_rules_tmp"
+}
+
 function ufw-docker--install() {
     if ! ufw-docker--check-install; then
         local after_rules_bak
@@ -359,6 +421,20 @@ function ufw-docker--install() {
         err "\\nBacking up $after_rules to $after_rules_bak"
         cp "$after_rules" "$after_rules_bak"
         cat "$after_rules_tmp" > "$after_rules"
+        err "Please restart UFW service manually by using the following command:"
+        if type systemctl &>/dev/null; then
+            err "    sudo systemctl restart ufw"
+        else
+            err "    sudo service ufw restart"
+        fi
+    fi
+
+    if ! ufw-docker--check-install_ipv6; then
+        local after6_rules_bak
+        after6_rules_bak="${after6_rules}-ufw-docker~$(date '+%Y-%m-%d-%H%M%S')~"
+        err "\\nBacking up $after6_rules to $after6_rules_bak"
+        cp "$after6_rules" "$after6_rules_bak"
+        cat "$after6_rules_tmp" > "$after6_rules"
         err "Please restart UFW service manually by using the following command:"
         if type systemctl &>/dev/null; then
             err "    sudo systemctl restart ufw"

@@ -18,7 +18,7 @@ source "$working_dir"/bach/bach.sh
     @mocktrue docker -v
     @mock docker -v === @stdout Docker version 0.0.0, build dummy
 
-    @ignore remove_blank_lines
+    @mockpipe remove_blank_lines
     @ignore echo
     @ignore err
 
@@ -465,7 +465,7 @@ test-ufw-docker--instance-name-found-a-name() {
 }
 test-ufw-docker--instance-name-found-a-name-assert() {
     docker inspect --format="{{.Name}}" foo
-    echo -n foo
+    @dryrun echo -n foo
 }
 
 
@@ -557,7 +557,7 @@ test-ufw-docker--list-number-assert() {
 
 test-ufw-docker--delete-empty-result() {
     @mock ufw-docker--list-number webapp 80 tcp === @stdout ""
-    @mock sort -rn
+    @mockpipe sort -rn
 
     load-ufw-docker-function ufw-docker--delete
     ufw-docker--delete webapp 80 tcp
@@ -569,7 +569,7 @@ test-ufw-docker--delete-empty-result-assert() {
 
 test-ufw-docker--delete-all() {
     @mock ufw-docker--list-number webapp 80 tcp === @stdout 5 8 9
-    @mock sort -rn
+    @mockpipe sort -rn
 
     load-ufw-docker-function ufw-docker--delete
     ufw-docker--delete webapp 80 tcp

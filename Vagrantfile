@@ -202,6 +202,11 @@ DOCKERFILE
     end
   end
 
+  config.vm.define "node-internal" do |node|
+    node.vm.hostname = "node-internal"
+    node.vm.network "private_network", ip: "#{ip_prefix}.142"
+  end
+
   config.vm.define "external" do |external|
     external.vm.hostname = "external"
     external.vm.network "private_network", ip: "#{ip_prefix}.127"

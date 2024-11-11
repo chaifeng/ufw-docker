@@ -6,16 +6,15 @@
 ENV['VAGRANT_NO_PARALLEL']="true"
 
 Vagrant.configure('2') do |config|
-
-  docker_version = "20.10.17"
-
   ubuntu_version = File.readlines("Dockerfile").filter { |line|
     line.start_with?("FROM ")
   }.first.match(/\d\d\.\d\d/)[0]
 
-  config.vm.box = "chaifeng/ubuntu-#{ubuntu_version}-docker-#{docker_version}#{(`uname -m`.strip == "arm64")?"-arm64":""}"
+  docker_version = File.readlines("Dockerfile").filter { |line|
+    line.start_with?("ARG docker_version=")
+  }.first.match(/"([\d\.]+)"/)[1]
 
-  #config.vm.box = "chaifeng/ubuntu-20.04-docker-20.10.17#{(`uname -m`.strip == "arm64")?"-arm64":""}"
+  config.vm.box = "chaifeng/ubuntu-#{ubuntu_version}-docker-#{docker_version}"
 
   config.vm.provider 'virtualbox' do |vb|
     vb.memory = '1024'
@@ -178,9 +177,10 @@ DOCKERFILE
 
         ufw-docker service allow public_service 80/tcp
 
-        docker service create --name "public_multiport" \
-            --publish "40080:80" --publish "47000:7000" --publish "48080:8080" \
-            --env name="public_multiport" --replicas 3 #{private_registry}/chaifeng/hostname-webapp
+        docker service inspect "public_multiport" ||
+            docker service create --name "public_multiport" \
+                --publish "40080:80" --publish "47000:7000" --publish "48080:8080" \
+                --env name="public_multiport" --replicas 3 #{private_registry}/chaifeng/hostname-webapp
 
         ufw-docker service allow public_multiport 80/tcp
         ufw-docker service allow public_multiport 8080/tcp

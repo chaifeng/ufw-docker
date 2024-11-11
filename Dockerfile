@@ -1,6 +1,6 @@
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
-ARG docker_version="20.10.17"
+ARG docker_version="27.3.1"
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
@@ -12,8 +12,7 @@ RUN apt-get update \
             | tee /etc/apt/sources.list.d/docker.list > /dev/null \
     && apt-get update \
     && apt-get install -y --no-install-recommends locales ufw \
-    && ( apt-get install -y --no-install-recommends "docker-ce=5:${docker_version}~*" || \
-         apt-get install -y --no-install-recommends "docker-ce=${docker_version}~*" ) \
+    && apt-get install -y --no-install-recommends "docker-ce=$(apt-cache madison docker-ce | grep -m1 -F "${docker_version}" | cut -d'|' -f2 | tr -d '[[:blank:]]')" \
     && locale-gen en_US.UTF-8 \
     && apt-get clean autoclean \
     && apt-get autoremove --yes \

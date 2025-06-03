@@ -397,7 +397,7 @@ function ufw-docker--help() {
 
 	  ufw-docker delete allow httpd
 	  ufw-docker delete allow httpd 80/tcp
-          ufw-docker delete allow httpd 80/tcp default
+	  ufw-docker delete allow httpd 80/tcp default
 
 	  ufw-docker service allow httpd 80/tcp
 

@@ -87,12 +87,13 @@ Vagrant.configure('2') do |config|
             daemonize: true
     end
 
-    ufw_docker_agent_image = "#{private_registry}/chaifeng/ufw-docker-agent:test-legacy"
+    ufw_docker_agent_image = "#{private_registry}/chaifeng/ufw-docker-agent:test"
 
     master.vm.provision "docker-build-ufw-docker-agent", preserve_order: true, type: 'shell', inline: <<-SHELL
-      set -euo pipefail
+      set -xeuo pipefail
       suffix="$(iptables --version | grep -o '\\(nf_tables\\|legacy\\)')"
-      docker build -t "#{ufw_docker_agent_image}-${suffix}" /vagrant
+      if [[ "$suffix" = legacy ]]; then use_iptables_legacy=true; else use_iptables_legacy=false; fi
+      docker build --build-arg use_iptables_legacy="${use_iptables_legacy:-false}" -t "#{ufw_docker_agent_image}-${suffix}" /vagrant
       docker push "#{ufw_docker_agent_image}-${suffix}"
 
       echo "export UFW_DOCKER_AGENT_IMAGE=#{ufw_docker_agent_image}-${suffix}" > /etc/profile.d/ufw-docker.sh
@@ -115,10 +116,10 @@ Vagrant.configure('2') do |config|
         docker build -t #{private_registry}/chaifeng/hostname-webapp - <<\\DOCKERFILE
 FROM httpd:alpine
 
+RUN printf "Listen %s\\n" 7000 8080 >> /usr/local/apache2/conf/httpd.conf
+
 RUN { echo '#!/bin/sh'; \\
     echo 'set -e; (echo -n "${name:-Hi} "; hostname;) > /usr/local/apache2/htdocs/index.html'; \\
-    echo 'grep "^Listen 7000" || echo Listen 7000 >> /usr/local/apache2/conf/httpd.conf'; \\
-    echo 'grep "^Listen 8080" || echo Listen 8080 >> /usr/local/apache2/conf/httpd.conf'; \\
     echo 'exec "$@"'; \\
     } > /entrypoint.sh; chmod +x /entrypoint.sh
 
@@ -187,7 +188,7 @@ DOCKERFILE
     SHELL
   end
 
-  1.upto 2 do |ip|
+  1.upto 1 do |ip|
     config.vm.define "node#{ip}" do | node |
       node.vm.hostname = "node#{ip}"
       node.vm.network "private_network", ip: "#{ip_prefix}.#{ 130 + ip }"

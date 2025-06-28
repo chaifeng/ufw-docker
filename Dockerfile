@@ -1,6 +1,7 @@
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
-ARG docker_version="20.10.17"
+ARG docker_version="27.3.1"
+ARG use_iptables_legacy=false
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
@@ -12,9 +13,17 @@ RUN apt-get update \
             | tee /etc/apt/sources.list.d/docker.list > /dev/null \
     && apt-get update \
     && apt-get install -y --no-install-recommends locales ufw \
-    && ( apt-get install -y --no-install-recommends "docker-ce=5:${docker_version}~*" || \
-         apt-get install -y --no-install-recommends "docker-ce=${docker_version}~*" ) \
+    && apt-get install -y --no-install-recommends "docker-ce=$(apt-cache madison docker-ce | grep -m1 -F "${docker_version}" | cut -d'|' -f2 | tr -d '[[:blank:]]')" \
     && locale-gen en_US.UTF-8 \
+    && if "$use_iptables_legacy"; then \
+          apt-get -y install arptables ebtables \
+          && update-alternatives --install /usr/sbin/arptables arptables /usr/sbin/arptables-legacy 100 \
+          && update-alternatives --install /usr/sbin/ebtables ebtables /usr/sbin/ebtables-legacy 100 \
+          && update-alternatives --set iptables /usr/sbin/iptables-legacy \
+          && update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy \
+          && update-alternatives --set arptables /usr/sbin/arptables-legacy \
+          && update-alternatives --set ebtables /usr/sbin/ebtables-legacy; \
+       fi \
     && apt-get clean autoclean \
     && apt-get autoremove --yes \
     && rm -rf /var/lib/{apt,dpkg,cache,log}/

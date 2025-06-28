@@ -518,6 +518,18 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 
 不支持老版本的 Ubuntu，而且命令的使用上可能也会比较复杂。
 
+### 支持 IPv6
+
+[Enable IPv6 support](https://forums.docker.com/t/docker-user-chain-for-ip6tables/133961/3) in Docker by specifying ULA range (RFC 4193) in `/etc/docker/daemon.json` 
+```json
+{
+  "experimental": true,
+  "ipv6": true,
+  "ip6tables": true,
+  "fixed-cidr-v6": "fd00:dead:beef::/48"
+}
+```
+
 #### 结论
 
 如果我们正在使用老版本的 Ubuntu，我们可以使用 `ufw-user-input`。但是要小心避免把不该暴露的服务暴露出去。

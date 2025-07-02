@@ -18,7 +18,7 @@ UFW is a popular iptables front end on Ubuntu that makes it easy to manage firew
 The issue is:
 
 1. UFW is enabled on a server that provides external services, and all incoming connections that are not allowed are blocked by default.
-2. Run a Docker container on the server and use the `-p` option to publish ports for that container on all IP addresses. 
+2. Run a Docker container on the server and use the `-p` option to publish ports for that container on all IP addresses.
    For example: `docker run -d --name httpd -p 0.0.0.0:8080:80 httpd:alpine`, this command will run an httpd service and publish port 80 of the container to port 8080 of the server.
 3. UFW will not block all external requests to visit port 8080. Even the command `ufw deny 8080` will not prevent external access to this port.
 4. This problem is actually quite serious, which means that a port that was originally intended to provide services internally is exposed to the public network.
@@ -43,7 +43,7 @@ Almost all of these solutions are similar. It requires to disable docker's iptab
 
 The solutions that we can find on internet are very similar and not elegant, I hope a new solution can:
 
-- Don't need to disable Docker's iptables and let Docker to manage it's network. 
+- Don't need to disable Docker's iptables and let Docker to manage it's network.
   We don't need to manually maintain iptables rules for any new Docker networks, and avoid potential side effects after disabling iptables in Docker.
 - The public network cannot access ports that published by Docker. Even if the port is published on all IP addresses using an option like `-p 8080:80`. Containers and internal networks can visit each other normally.
   Although it is possible to have Docker publish a container's port to the server's private IP address, the port will not be accessed on the public network. But, this server may have multiple private IP addresses, and these private IP addresses may also change.
@@ -195,7 +195,7 @@ Doesn't support older versions of Ubuntu, and the command is a bit more complica
 
 ### IPv6
 
-[Enable IPv6 support](https://forums.docker.com/t/docker-user-chain-for-ip6tables/133961/3) in Docker by specifying ULA range (RFC 4193) in `/etc/docker/daemon.json` 
+[Enable IPv6 support](https://forums.docker.com/t/docker-user-chain-for-ip6tables/133961/3) in Docker by specifying ULA range (RFC 4193) in `/etc/docker/daemon.json`
 ```json
 {
   "experimental": true,
@@ -235,6 +235,36 @@ Then using the following command to modify the `after.rules` file of `ufw`
 This command does the following things:
 - Back up the file `/etc/ufw/after.rules`
 - Append the rules of UFW and Docker at the end of the file
+
+#### IPv6 support
+
+`ufw-docker` also supports IPv6 networks and will update `/etc/ufw/after6.rules` when necessary.
+
+### Using the `--docker-subnets` option
+
+You can use the `--docker-subnets` option to customize which subnets will be allowed to communicate with Docker containers.
+This option applies to both IPv4 and IPv6 networks.
+
+* If the option is **not provided**, only standard private LAN subnets will be used
+  (IPv4: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`; IPv6: `fd00::/8`)
+* If `--docker-subnets` is given **without any arguments**, all Docker network subnets will be detected and used automatically.
+  **Note:** If you add or remove Docker networks, you need to run `ufw-docker install --docker-subnets` again to update the firewall rules according to the latest network configuration.
+* If one or more subnets are specified, only these subnets will be used (you can list multiple subnets, separated by spaces; each should be in CIDR format).
+  The subnets can include networks not managed by Docker itself.
+
+#### Examples
+
+    # Use default private LAN subnets (IPv4: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16; IPv6: fd00::/8)
+    ufw-docker install
+
+    # Auto-detect and use all Docker network subnets (both IPv4 and IPv6)
+    ufw-docker install --docker-subnets
+
+    # Only allow these specified subnets to communicate with Docker containers
+    ufw-docker install --docker-subnets 192.168.207.0/24 10.207.0.0/16 fd00:cf::/64
+
+
+You can use the same options with `ufw-docker check` to preview the changes before applying them.
 
 #### Install for Docker Swarm mode
 
@@ -305,7 +335,7 @@ Remove rules from all nodes related to the service `web`
 
 ### Try it out
 
-We use [Vagrant](https://www.vagrantup.com/) to set up a local testing environment. 
+We use [Vagrant](https://www.vagrantup.com/) to set up a local testing environment.
 
 Run the following command to create 1 master node and 2 worker nodes
 
@@ -422,7 +452,7 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 
     COMMIT
     # END UFW AND DOCKER
- 
+
 然后重启 UFW，`sudo systemctl restart ufw`。现在外部就已经无法访问 Docker 发布出来的任何端口了，但是容器内部以及私有网络地址上可以正常互相访问，而且容器也可以正常访问外部的网络。**可能由于某些未知原因，重启 UFW 之后规则也无法生效，请重启服务器。**
 
 如果希望允许外部网络访问 Docker 容器提供的服务，比如有一个容器的服务端口是 `80`。那就可以用以下命令来允许外部网络访问这个服务：
@@ -520,7 +550,8 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 
 ### 支持 IPv6
 
-[Enable IPv6 support](https://forums.docker.com/t/docker-user-chain-for-ip6tables/133961/3) in Docker by specifying ULA range (RFC 4193) in `/etc/docker/daemon.json` 
+要让 Docker Engine [启用 IPv6 的支持](https://forums.docker.com/t/docker-user-chain-for-ip6tables/133961/3). 你需要在 `/etc/docker/daemon.json` 文件中启用相关设置，并分配一个 ULA（唯一本地地址，RFC 4193）地址段作为 IPv6 网络范围。
+
 ```json
 {
   "experimental": true,
@@ -555,6 +586,33 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 这个命令做了以下事情：
 - 备份文件 `/etc/ufw/after.rules`
 - 把 UFW 和 Docker 的相关规则添加到文件 `after.rules` 的末尾
+
+#### IPv6 支持
+
+`ufw-docker` 也支持 IPv6 网络，并会在需要时自动更新 `/etc/ufw/after6.rules` 文件。
+
+### 使用 `--docker-subnets` 选项
+
+你可以使用 `--docker-subnets` 选项，自定义允许与 Docker 容器通信的子网。
+该选项同时适用于 IPv4 和 IPv6 网络。
+
+* 如果**未指定**该选项，只会使用标准的私有局域网子网
+  （IPv4：`10.0.0.0/8`、`172.16.0.0/12`、`192.168.0.0/16`；IPv6：`fd00::/8`）
+* 如果指定了 `--docker-subnets` 但**未带参数**，会自动检测并使用所有 Docker 网络的子网。
+  **注意：** 如果你对 Docker 网络进行了新增或删除操作，需要重新运行 `ufw-docker install --docker-subnets`，以便根据最新的网络配置更新防火墙规则。
+* 如果指定了一个或多个子网，则只会使用这些子网（你可以用空格分隔多个子网，每个子网应为 CIDR 格式）。
+  这些子网可以包括非 Docker 管理的网络。
+
+#### 示例
+
+    # 使用默认的私有局域网子网（IPv4：10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16；IPv6：fd00::/8）
+    ufw-docker install
+
+    # 自动检测并使用所有 Docker 网络的子网（同时支持 IPv4 和 IPv6）
+    ufw-docker install --docker-subnets
+
+    # 仅允许这些指定的子网与 Docker 容器通信
+    ufw-docker install --docker-subnets 192.168.207.0/24 10.207.0.0/16 fd00:cf::/64
 
 #### 为 Docker Swarm 环境安装
 

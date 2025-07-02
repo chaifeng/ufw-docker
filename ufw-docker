@@ -24,7 +24,7 @@ fi
 test -n "$ufw_docker_agent_image"
 
 function ufw-docker--status() {
-    ufw-docker--list "$GREP_REGEXP_INSTANCE_NAME" | uniq
+    ufw-docker--list "$GREP_REGEXP_INSTANCE_NAME\(/v6\)\?"
 }
 
 function ufw-docker--list() {
@@ -32,6 +32,7 @@ function ufw-docker--list() {
     local INSTANCE_PORT="${2:-}"
     local PROTO="${3:-${DEFAULT_PROTO}}"
     local NETWORK="${4:-}"
+    local params_count="$#"
 
     if [[ -z "$INSTANCE_PORT" ]]; then
         INSTANCE_PORT="[[:digit:]]\\+"
@@ -42,19 +43,16 @@ function ufw-docker--list() {
        NETWORK="[[:graph:]]*"
     fi
 
-    # IPv4
-    ufw status numbered | grep "# allow ${INSTANCE_NAME}\\( ${INSTANCE_PORT}\\/${PROTO}\\)\\( ${NETWORK}\\)\$" ||  \
-    ufw status numbered | grep "# allow ${INSTANCE_NAME}\\( ${INSTANCE_PORT}\\/${PROTO}\\)\$" || \
-    ufw status numbered | grep "# allow ${INSTANCE_NAME}\$"
+    local ufw_output
+    ufw_output="$(ufw status numbered)"
 
-    # IPv6
-    ufw status numbered | grep "# allow ${INSTANCE_NAME}_IPv6\\( ${INSTANCE_PORT}\\/${PROTO}\\)\\( ${NETWORK}\\)\$" ||  \
-    ufw status numbered | grep "# allow ${INSTANCE_NAME}_IPv6\\( ${INSTANCE_PORT}\\/${PROTO}\\)\$" || \
-    ufw status numbered | grep "# allow ${INSTANCE_NAME}_IPv6\$"
+    grep "# allow ${INSTANCE_NAME}\\( ${INSTANCE_PORT}\\/${PROTO}\\)\\( ${NETWORK}\\)\$" <<< "$ufw_output" ||
+        grep "# allow ${INSTANCE_NAME}\\( ${INSTANCE_PORT}\\/${PROTO}\\)\$" <<< "$ufw_output" ||
+        grep "# allow ${INSTANCE_NAME}\$" <<< "$ufw_output"
 }
 
 function ufw-docker--list-number() {
-    ufw-docker--list "$@" | sed -e 's/^\[[[:blank:]]*\([[:digit:]]\+\)\].*/\1/' | uniq
+    ufw-docker--list "$@" | sed -e 's/^\[[[:blank:]]*\([[:digit:]]\+\)\].*/\1/'
 }
 
 function ufw-docker--delete() {
@@ -69,16 +67,15 @@ function ufw-docker--allow() {
     local INSTANCE_PORT="$2"
     local PROTO="$3"
     local NETWORK="${4:-}"
+    local NETWORK_ADDRESSES PORT_PROTO_LIST PROT_PROTO IP SUFFIX
 
     docker inspect "$INSTANCE_NAME" &>/dev/null ||
         die "Docker instance \"$INSTANCE_NAME\" doesn't exist."
 
-    mapfile -t INSTANCE_IP_ADDRESSES < <(docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{"\n"}}{{end}}' "$INSTANCE_NAME" 2>/dev/null | remove_blank_lines)
-    mapfile -t INSTANCE_IP_V6_ADDRESSES < <(docker inspect --format='{{range .NetworkSettings.Networks}}{{.GlobalIPv6Address}}{{"\n"}}{{end}}' "$INSTANCE_NAME" 2>/dev/null | remove_blank_lines)
+    mapfile -t NETWORK_ADDRESSES < <(docker inspect --format '{{range $name, $net := .NetworkSettings.Networks}}{{if $net.IPAddress}}{{$name}} {{$net.IPAddress}}{{"\n"}}{{end}}{{if $net.GlobalIPv6Address}}{{$name}} {{$net.GlobalIPv6Address}}{{"\n"}}{{end}}{{end}}' "$INSTANCE_NAME" 2>/dev/null | remove_blank_lines)
 
-    [[ -z "${INSTANCE_IP_ADDRESSES:-}" ]] && die "Could not find a running instance \"$INSTANCE_NAME\"."
+    [[ -z "${NETWORK_ADDRESSES:-}" ]] && die "Could not find a running instance \"$INSTANCE_NAME\"."
 
-    mapfile -t INSTANCE_NETWORK_NAMES < <(docker inspect --format='{{range $k, $v := .NetworkSettings.Networks}}{{printf "%s\n" $k}}{{end}}' "$INSTANCE_NAME" 2>/dev/null | remove_blank_lines)
     mapfile -t PORT_PROTO_LIST < <(docker inspect --format='{{range $p, $conf := .NetworkSettings.Ports}}{{with $conf}}{{$p}}{{"\n"}}{{end}}{{end}}' "$INSTANCE_NAME" | remove_blank_lines)
 
     if [[ -z "${PORT_PROTO_LIST:-}" ]]; then
@@ -86,36 +83,26 @@ function ufw-docker--allow() {
         return 1
     fi
 
-    RETVAL=1
+    local count=0
     for PORT_PROTO in "${PORT_PROTO_LIST[@]}"; do
         if [[ -z "$INSTANCE_PORT" || "$PORT_PROTO" = "${INSTANCE_PORT}/${PROTO}" ]]; then
-            ITER=0
-            for IP in "${INSTANCE_IP_ADDRESSES[@]}"; do
-                INSTANCE_NETWORK="${INSTANCE_NETWORK_NAMES[$ITER]}"
-                ITER=$((ITER+1))
+            for item in "${NETWORK_ADDRESSES[@]}"; do
+                INSTANCE_NETWORK="${item% *}"
+                IP="${item#* }"
                 if [[ -n "$NETWORK" ]] && [[ "$NETWORK" != "$INSTANCE_NETWORK" ]]; then
                     continue
                 fi
-                ufw-docker--add-rule "$INSTANCE_NAME" "$IP" "${PORT_PROTO%/*}" "${PORT_PROTO#*/}" "${INSTANCE_NETWORK}"
-                RETVAL="$?"
-            done
-
-            ITER_V6=0
-            for IP in "${INSTANCE_IP_V6_ADDRESSES[@]}"; do
-                INSTANCE_NETWORK="${INSTANCE_NETWORK_NAMES[$ITER_V6]}"
-                ITER_V6=$((ITER_V6+1))
-                if [[ -n "$NETWORK" ]] && [[ "$NETWORK" != "$INSTANCE_NETWORK" ]]; then
-                    continue
-                fi
-                ufw-docker--add-rule "${INSTANCE_NAME}_IPv6" "$IP" "${PORT_PROTO%/*}" "${PORT_PROTO#*/}" "${INSTANCE_NETWORK}"
-                RETVAL="$?"
+                if [[ "$IP" = *:* ]]; then SUFFIX="/v6"; else SUFFIX=""; fi
+                ufw-docker--add-rule "${INSTANCE_NAME}${SUFFIX}" "$IP" "${PORT_PROTO%/*}" "${PORT_PROTO#*/}" "${INSTANCE_NETWORK}"
+                (( ++count ))
             done
         fi
     done
-    if [[ "$RETVAL" -ne 0 ]]; then
+    if [[ "$count" -eq 0 ]]; then
         err "Fail to add rule(s), cannot find the published port ${INSTANCE_PORT}/${PROTO} of instance \"${INSTANCE_NAME}\" or cannot update outdated rule(s)."
+        return 1
     fi
-    return "$RETVAL"
+    return 0
 }
 
 function ufw-docker--add-service-rule() {
@@ -299,6 +286,7 @@ function ufw-docker--service-delete() {
     docker service update --update-parallelism=0 \
            --env-add ufw_docker_agent_image="${ufw_docker_agent_image}" \
            --env-add "${service_env}" \
+           --env-add DEBUG="${DEBUG-}" \
            --image "${ufw_docker_agent_image}" \
            "${ufw_docker_agent}"
 }
@@ -315,13 +303,15 @@ function ufw-docker--check() {
     iptables -n -L DOCKER-USER
 
     err "\\n\\n########## diff $after_rules ##########"
-    ufw-docker--check-install && err "\\nCheck done."
+    ufw-docker--check-install "$@" && err "\\nCheck IPv4 firewall rules done."
 
-    err "\\n########## ip6tables -n -L DOCKER-USER ##########"
-    ip6tables -n -L DOCKER-USER
+    if command -v ip6tables >/dev/null 2>&1; then
+        err "\\n########## ip6tables -n -L DOCKER-USER ##########"
+        ip6tables -n -L DOCKER-USER
 
-    err "\\n\\n########## diff $after6_rules ##########"
-    ufw-docker--check-install_ipv6 && err "\\nCheck IPv6 done."
+        err "\\n\\n########## diff $after6_rules ##########"
+        ufw-docker--check-install_ipv6 "$@" && err "\\nCheck IPv6 firewall rules done."
+    fi
 }
 
 declare -a files_to_be_deleted
@@ -339,12 +329,45 @@ function on-exit() {
 
 trap on-exit EXIT INT TERM QUIT ABRT ERR
 
+function ufw-docker--list-docker-subnets() {
+    local ipversion="$1"
+    shift || true
+    if [[ -z "${1-}" ]]; then
+        docker network ls --format '{{.ID}}' |
+        while read -r net; do
+            docker network inspect "$net" --format '{{range .IPAM.Config}}{{.Subnet}}{{"\n"}}{{end}}'
+        done
+    else
+        printf "%s\n" "$@"
+     fi |
+        while read -r cidr; do
+            if [[ "${ipversion}" = "IPv4" && "$cidr" = *.* ]] || [[ "${ipversion}" = "IPv6" && "$cidr" = *:* ]]
+            then echo "$cidr"
+            fi
+        done |
+        sort
+}
+
 function ufw-docker--check-install() {
+    declare -a cidr_list
+    declare cidr
+    if [[ -z "${1-}" ]]; then
+        cidr_list=(10.0.0.0/8 172.16.0.0/12 192.168.0.0/16)
+    elif [[ "${1-}" = '--docker-subnets' ]]; then
+        shift || true
+        mapfile -t cidr_list < <(ufw-docker--list-docker-subnets IPv4 "$@")
+    fi
+    if [[ -z "${cidr_list:-}" ]]; then
+        err "ERROR: Could not find any IPv4 subnets used by docker engine\n"
+        exit 1
+    fi
+
     after_rules_tmp="${after_rules_tmp:-$(mktemp)}"
     rm-on-exit "$after_rules_tmp"
 
     sed "/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d" "$after_rules" > "$after_rules_tmp"
-    >> "${after_rules_tmp}" cat <<-\EOF
+    {
+        cat <<-\EOF
 	# BEGIN UFW AND DOCKER
 	*filter
 	:ufw-user-forward - [0:0]
@@ -352,18 +375,26 @@ function ufw-docker--check-install() {
 	:DOCKER-USER - [0:0]
 	-A DOCKER-USER -j ufw-user-forward
 
-	-A DOCKER-USER -j RETURN -s 10.0.0.0/8
-	-A DOCKER-USER -j RETURN -s 172.16.0.0/12
-	-A DOCKER-USER -j RETURN -s 192.168.0.0/16
+	EOF
+
+        for cidr in "${cidr_list[@]}"; do
+	          echo "-A DOCKER-USER -j RETURN -s ${cidr}"
+        done
+
+        cat <<-\EOF
 
 	-A DOCKER-USER -p udp -m udp --sport 53 --dport 1024:65535 -j RETURN
 
-	-A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 192.168.0.0/16
-	-A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 10.0.0.0/8
-	-A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 172.16.0.0/12
-	-A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 192.168.0.0/16
-	-A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 10.0.0.0/8
-	-A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 172.16.0.0/12
+	EOF
+
+        for cidr in "${cidr_list[@]}"; do
+	          echo "-A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d ${cidr}"
+        done
+        for cidr in "${cidr_list[@]}"; do
+	          echo "-A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d ${cidr}"
+        done
+
+        cat <<-\EOF
 
 	-A DOCKER-USER -j RETURN
 
@@ -373,19 +404,30 @@ function ufw-docker--check-install() {
 	COMMIT
 	# END UFW AND DOCKER
 	EOF
-
+    } >> "${after_rules_tmp}"
     diff -u --color=auto "$after_rules" "$after_rules_tmp"
 }
 
 function ufw-docker--check-install_ipv6() {
-    DOCKER_IPV6_NETWORK=$(sed -En 's/.*"fixed-cidr-v6":.?"([^"]*).*/\1/p' /etc/docker/daemon.json)
-    [[ -z "${DOCKER_IPV6_NETWORK:-}" ]] && die "Could not find \"fixed-cidr-v6\" in \"/etc/docker/daemon.json\"."
+    declare -a cidr6_list
+    declare cidr
+    if [[ -z "${1-}" ]]; then
+        cidr6_list=(fd00::/8)
+    elif [[ "${1-}" = '--docker-subnets' ]]; then
+        shift || true
+        mapfile -t cidr6_list < <(ufw-docker--list-docker-subnets IPv6 "$@")
+    fi
+    if [[ -z "${cidr6_list:-}" ]]; then
+        err "INFO: Could not find any IPv6 subnets used by docker engine, will disable IPv6 support.\n"
+        return 0
+    fi
 
     after6_rules_tmp="${after6_rules_tmp:-$(mktemp)}"
     rm-on-exit "$after6_rules_tmp"
 
     sed "/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d" "$after6_rules" > "$after6_rules_tmp"
-    >> "${after6_rules_tmp}" cat <<-\EOF
+    {
+        cat <<-\EOF
 	# BEGIN UFW AND DOCKER
 	*filter
 	:ufw6-user-forward - [0:0]
@@ -393,12 +435,22 @@ function ufw-docker--check-install_ipv6() {
 	:DOCKER-USER - [0:0]
 	-A DOCKER-USER -j ufw6-user-forward
 
-	-A DOCKER-USER -j RETURN -s {DOCKER_IPV6_NETWORK}
+	EOF
 
+        for cidr in "${cidr6_list[@]}"; do
+	          echo "-A DOCKER-USER -j RETURN -s ${cidr}"
+        done
+
+        cat <<-\EOF
 	-A DOCKER-USER -p udp -m udp --sport 53 --dport 1024:65535 -j RETURN
+	EOF
 
-	-A DOCKER-USER -j ufw6-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d {DOCKER_IPV6_NETWORK}
-	-A DOCKER-USER -j ufw6-docker-logging-deny -p udp -m udp --dport 0:32767 -d {DOCKER_IPV6_NETWORK}
+        for cidr in "${cidr6_list[@]}"; do
+	          echo "-A DOCKER-USER -j ufw6-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d ${cidr}"
+	          echo "-A DOCKER-USER -j ufw6-docker-logging-deny -p udp -m udp --dport 0:32767 -d ${cidr}"
+        done
+
+        cat <<-\EOF
 
 	-A DOCKER-USER -j RETURN
 
@@ -408,33 +460,31 @@ function ufw-docker--check-install_ipv6() {
 	COMMIT
 	# END UFW AND DOCKER
 	EOF
-
-    sed -i "s/{DOCKER_IPV6_NETWORK}/${DOCKER_IPV6_NETWORK/\//\\/}/g" "$after6_rules_tmp"
-
+    } >> "${after6_rules_tmp}"
     diff -u --color=auto "$after6_rules" "$after6_rules_tmp"
 }
 
 function ufw-docker--install() {
-    if ! ufw-docker--check-install; then
+    local changed=false
+    if ! ufw-docker--check-install "$@"; then
+        changed=true
         local after_rules_bak
         after_rules_bak="${after_rules}-ufw-docker~$(date '+%Y-%m-%d-%H%M%S')~"
         err "\\nBacking up $after_rules to $after_rules_bak"
         cp "$after_rules" "$after_rules_bak"
         cat "$after_rules_tmp" > "$after_rules"
-        err "Please restart UFW service manually by using the following command:"
-        if type systemctl &>/dev/null; then
-            err "    sudo systemctl restart ufw"
-        else
-            err "    sudo service ufw restart"
-        fi
     fi
 
-    if ! ufw-docker--check-install_ipv6; then
+    if ! ufw-docker--check-install_ipv6 "$@"; then
+        changed=true
         local after6_rules_bak
         after6_rules_bak="${after6_rules}-ufw-docker~$(date '+%Y-%m-%d-%H%M%S')~"
         err "\\nBacking up $after6_rules to $after6_rules_bak"
         cp "$after6_rules" "$after6_rules_bak"
         cat "$after6_rules_tmp" > "$after6_rules"
+    fi
+
+    if "$changed"; then
         err "Please restart UFW service manually by using the following command:"
         if type systemctl &>/dev/null; then
             err "    sudo systemctl restart ufw"
@@ -442,6 +492,31 @@ function ufw-docker--install() {
             err "    sudo service ufw restart"
         fi
     fi
+}
+
+function ufw-docker--install--help() {
+    cat <<HELP
+ufw-docker $1 --docker-subnets [SUBNET1 SUBNET2 …]
+
+Specify which subnets should be used when configuring firewall rules for Docker containers and any allowed networks that communicate with containers.
+
+  - If this option is not provided, only standard private LAN subnets are used (RFC1918 for IPv4 and fd00::/8 for IPv6).
+  - If --docker-subnets is given without any arguments, all Docker network subnets will be automatically detected and used.
+  - If one or more subnets are specified, these subnets will be used for firewall rules, and they can include any networks that need to communicate with containers—not just the subnets configured by the Docker engine.
+    You can specify multiple subnets separated by spaces (each in CIDR format).
+
+Examples:
+  - ufw-docker $1
+    Use only standard private subnets (default behavior).
+      - IPv4 subnets: 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+      - IPv6 subnet: fd00::/8
+
+  - ufw-docker $1 --docker-subnets
+    Auto-detect and use all Docker network subnets.
+
+  - ufw-docker $1 --docker-subnets 10.207.0.0/16 192.168.207.0/24 fd00:cf::/64
+    Use only the specified subnets, including those outside of Docker’s own configuration, for all networks that should be allowed to communicate with containers.
+HELP
 }
 
 function ufw-docker--help() {
@@ -453,18 +528,26 @@ function ufw-docker--help() {
 	  ufw-docker service allow <swarm-service-id-or-name <port</tcp|/udp>>>
 	  ufw-docker service delete allow <swarm-service-id-or-name>
 
+	  ufw-docker <install|check> [--docker-subnets [SUBNET0 SUBNET1 ...]]
+
 	  ufw-docker <status|install|check|help>
 
 	Examples:
 	  ufw-docker help
+	  ufw-docker check --help
+	  ufw-docker install --help
 
-	  ufw-docker check           # Check the installation of firewall rules
-	  ufw-docker install         # Install firewall rules
+	  ufw-docker check                         # Check the installation of firewall rules
+	  ufw-docker check --docker-subnets        # Auto-detect and use all Docker network subnets
+	  ufw-docker check --docker-subnets 192.168.207.0/24 10.207.0.0/16 fd00:cf::/64
+
+	  ufw-docker install                      # Install firewall rules
+	  ufw-docker install --docker-subnets     # Auto-detect and use all Docker network subnets
+	  ufw-docker install --docker-subnets 192.168.207.0/24 10.207.0.0/16 fd00:cf::/64
 
 	  ufw-docker status
 
 	  ufw-docker list httpd
-
 
 	  ufw-docker allow httpd
 	  ufw-docker allow httpd 80
@@ -534,14 +617,26 @@ case "$ufw_action" in
         NETWORK="${1:-}"
 
         INSTANCE_PORT="${INSTANCE_PORT%/*}"
-
+        ;;&
+    delete|list)
+        "ufw-docker--$ufw_action" "$INSTANCE_NAME\\(/v6\\)\\?" "$INSTANCE_PORT" "$PROTO" "$NETWORK"
+        ;;
+    allow)
         "ufw-docker--$ufw_action" "$INSTANCE_NAME" "$INSTANCE_PORT" "$PROTO" "$NETWORK"
         ;;
     service|raw-command|add-service-rule)
         shift || true
         "ufw-docker--$ufw_action" "$@"
         ;;
-    status|install|check)
+    install|check)
+        shift || true
+        if [[ "${1-}" = @(help|-h|--help) ]]; then
+            ufw-docker--install--help "$ufw_action"
+            exit
+        fi
+        "ufw-docker--$ufw_action" "$@"
+        ;;
+    status)
         ufw-docker--"$ufw_action"
         ;;
     *)

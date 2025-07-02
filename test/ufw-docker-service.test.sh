@@ -284,6 +284,7 @@ test-ufw-docker--service-delete-matches-assert() {
     docker service update --update-parallelism=0 \
            --env-add ufw_docker_agent_image="${ufw_docker_agent_image}" \
            --env-add "ufw_public_abcd1234=webapp/deny" \
+           --env-add "DEBUG=false" \
            --image "${ufw_docker_agent_image}" \
            "${ufw_docker_agent}"
 }

@@ -1,7 +1,7 @@
 FROM ubuntu:24.04
 
 ARG docker_version="27.3.1"
-ARG use_iptables_legacy=false
+ARG use_iptables_legacy=true
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \

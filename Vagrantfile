@@ -43,7 +43,22 @@ Vagrant.configure('2') do |config|
   end
 
   config.vm.provision 'setup', preserve_order: true, type: 'shell', privileged: false, inline: <<-SHELL
+    set -xeuo pipefail
     byobu-ctrl-a screen
+  SHELL
+
+  ENV['IPTABLES_LEGACY'] ||= 'true'
+  config.vm.provision 'iptables', preserve_order: true, type: 'shell', inline: <<-SHELL
+    set -xeuo pipefail
+    if #{env_true_str?('IPTABLES_LEGACY')} && iptables --version | grep nf_tables; then
+      apt-get -y install arptables ebtables
+      update-alternatives --install /usr/sbin/arptables arptables /usr/sbin/arptables-legacy 100
+      update-alternatives --install /usr/sbin/ebtables ebtables /usr/sbin/ebtables-legacy 100
+      update-alternatives --set iptables /usr/sbin/iptables-legacy
+      update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
+      update-alternatives --set arptables /usr/sbin/arptables-legacy
+      update-alternatives --set ebtables /usr/sbin/ebtables-legacy
+    fi
   SHELL
 
   config.vm.provision 'docker-daemon-config',  type: 'shell', inline: <<-SHELL

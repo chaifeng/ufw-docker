@@ -157,8 +157,7 @@ test-ufw-docker--service-allow-a-service-without-ports-published() {
     @mocktrue grep -E '^[0-9]+(/(tcp|udp))?$'
     @mock ufw-docker--get-service-id private-web === @stdout abcd1234
     @mock ufw-docker--get-service-name private-web === @stdout private-web
-    @mock docker service inspect private-web \
-          --format '{{range .Endpoint.Spec.Ports}}{{.PublishedPort}} {{.TargetPort}}/{{.Protocol}}{{"\n"}}{{end}}' === @stdout ""
+    @mock ufw-docker--list-service-ports private-web === @stdout ""
 
     load-ufw-docker-function ufw-docker--service-allow
     ufw-docker--service-allow private-web 80/tcp
@@ -173,9 +172,7 @@ test-ufw-docker--service-allow-a-service-while-agent-not-running() {
     @mocktrue grep -E '^[0-9]+(/(tcp|udp))?$'
     @mock ufw-docker--get-service-id webapp === @stdout abcd1234
     @mock ufw-docker--get-service-name webapp === @stdout webapp
-    @mock docker service inspect webapp \
-          --format '{{range .Endpoint.Spec.Ports}}{{.PublishedPort}} {{.TargetPort}}/{{.Protocol}}{{"\n"}}{{end}}' \
-          === @stdout "53 53/udp" "80 80/tcp" "8080 8080/tcp"
+    @mock ufw-docker--list-service-ports webapp === @stdout "53 53/udp" "80 80/tcp" "8080 8080/tcp"
     @mockfalse docker service inspect ufw-docker-agent
 
     load-ufw-docker-function ufw-docker--service-allow
@@ -196,9 +193,7 @@ test-ufw-docker--service-allow-a-service-add-new-env() {
     @mocktrue grep -E '^[0-9]+(/(tcp|udp))?$'
     @mock ufw-docker--get-service-id webapp === @stdout abcd1234
     @mock ufw-docker--get-service-name webapp === @stdout webapp
-    @mock docker service inspect webapp \
-          --format '{{range .Endpoint.Spec.Ports}}{{.PublishedPort}} {{.TargetPort}}/{{.Protocol}}{{"\n"}}{{end}}' \
-          === @stdout "53 53/udp" "80 80/tcp" "8080 8080/tcp"
+    @mock ufw-docker--list-service-ports webapp === @stdout "53 53/udp" "80 80/tcp" "8080 8080/tcp"
     @mocktrue docker service inspect ufw-docker-agent
     @mock ufw-docker--get-env-list === @stdout "abcd1234 webapp/80/tcp"
 
@@ -219,9 +214,7 @@ test-ufw-docker--service-allow-a-service-update-a-env() {
     @mocktrue grep -E '^[0-9]+(/(tcp|udp))?$'
     @mock ufw-docker--get-service-id webapp === @stdout abcd1234
     @mock ufw-docker--get-service-name webapp === @stdout webapp
-    @mock docker service inspect webapp \
-          --format '{{range .Endpoint.Spec.Ports}}{{.PublishedPort}} {{.TargetPort}}/{{.Protocol}}{{"\n"}}{{end}}' \
-          === @stdout "53 53/udp" "80 80/tcp" "8080 8080/tcp"
+    @mock ufw-docker--list-service-ports webapp === @stdout "53 53/udp" "80 80/tcp" "8080 8080/tcp"
     @mocktrue docker service inspect ufw-docker-agent
     @mock ufw-docker--get-env-list === @stdout "a_different_id webapp/80/tcp"
 
@@ -287,4 +280,12 @@ test-ufw-docker--service-delete-matches-assert() {
            --env-add "DEBUG=false" \
            --image "${ufw_docker_agent_image}" \
            "${ufw_docker_agent}"
+}
+
+test-ufw-docker--list-service-ports() {
+    load-ufw-docker-function ufw-docker--list-service-ports
+     ufw-docker--list-service-ports foo
+}
+test-ufw-docker--list-service-ports-assert() {
+    docker service inspect foo --format '{{range .Endpoint.Spec.Ports}}{{.PublishedPort}} {{.TargetPort}}/{{.Protocol}}{{"\n"}}{{end}}'
 }

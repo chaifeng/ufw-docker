@@ -34,7 +34,7 @@ jobs:
         with:
           images: ${{ github.actor }}/ufw-docker-agent
           tags: |
-            type=ref,event=tag
+            type=ref,event=tag,suffix=-${{ matrix.variant.name }}
 
       - name: Build and push
         uses: docker/build-push-action@v6

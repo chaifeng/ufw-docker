@@ -11,7 +11,7 @@ DEFAULT_PROTO=tcp
 ENV_VALUE_SPLITTER=','
 
 ufw_docker_agent=ufw-docker-agent
-ufw_docker_agent_image="${UFW_DOCKER_AGENT_IMAGE:-chaifeng/${ufw_docker_agent}:250702-nf_tables}"
+ufw_docker_agent_image="${UFW_DOCKER_AGENT_IMAGE:-chaifeng/${ufw_docker_agent}:250708-nf_tables}"
 
 after_rules="/etc/ufw/after.rules"
 after6_rules="/etc/ufw/after6.rules"

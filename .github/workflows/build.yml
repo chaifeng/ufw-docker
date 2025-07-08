@@ -34,10 +34,7 @@ jobs:
         with:
           images: ${{ github.actor }}/ufw-docker-agent
           tags: |
-            type=schedule,suffix=-${{ matrix.variant.name }}
-            type=ref,event=branch,suffix=-${{ matrix.variant.name }}
-            type=ref,event=pr,suffix=-${{ matrix.variant.name }}
-            type=semver,pattern={{version}},suffix=-${{ matrix.variant.name }}
+            type=ref,event=tag
 
       - name: Build and push
         uses: docker/build-push-action@v6

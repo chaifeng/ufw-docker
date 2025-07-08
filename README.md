@@ -681,6 +681,8 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 
     ufw-docker service delete allow web
 
+    ufw-docker service delete allow web 80/tcp
+
 ### 试试
 
 我们使用 [Vagrant](https://www.vagrantup.com/) 来创建一个本地的测试环境。

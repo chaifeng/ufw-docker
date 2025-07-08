@@ -19,12 +19,10 @@ source "$working_dir"/bach/bach.sh
     @mock docker -v === @stdout Docker version 0.0.0, build dummy
 
     @mockpipe remove_blank_lines
-    @ignore echo
+    #@ignore echo
     @ignore err
 
-    DEFAULT_PROTO=tcp
-    GREP_REGEXP_INSTANCE_NAME="[-_.[:alnum:]]\\+"
-
+    builtin source <(@sed -n -e '/^# UFW-DOCKER GLOBAL VARIABLES START #$/,/^# UFW-DOCKER GLOBAL VARIABLES END #$/{' -e '/^PATH=/d' -e 'p' -e '}' "$working_dir/../ufw-docker")
     UFW_DOCKER_AGENT_IMAGE=chaifeng/ufw-docker-agent:090502-legacy
 }
 
@@ -34,7 +32,6 @@ function ufw-docker() {
 
 function load-ufw-docker-function() {
     set -euo pipefail
-
     @load_function "$working_dir/../ufw-docker" "$1"
 }
 
@@ -214,7 +211,7 @@ test-ufw-docker-list-httpd() {
     ufw-docker list httpd
 }
 test-ufw-docker-list-httpd-assert() {
-    ufw-docker--list 'httpd-container-name\(/v6\)\?' "" tcp ""
+    ufw-docker--list httpd-container-name "" tcp ""
 }
 
 
@@ -267,7 +264,7 @@ test-ufw-docker-delete-allow-httpd() {
     ufw-docker delete allow httpd
 }
 test-ufw-docker-delete-allow-httpd-assert() {
-    ufw-docker--delete 'httpd-container-name\(/v6\)\?' "" tcp ""
+    ufw-docker--delete httpd-container-name "" tcp ""
 }
 
 
@@ -487,6 +484,7 @@ test-IPv6-ufw-docker--allow-instance-all-published-port-multinetwork-select-netw
 
 test-ufw-docker--add-rule-a-non-existing-rule() {
     @mockfalse ufw-docker--list webapp 5000 tcp ""
+    @ignore echo
 
     load-ufw-docker-function ufw-docker--add-rule
     ufw-docker--add-rule webapp 172.18.0.4 5000 tcp
@@ -497,6 +495,7 @@ test-ufw-docker--add-rule-a-non-existing-rule-assert() {
 
 test-ufw-docker--add-rule-a-non-existing-rule-with-network() {
     @mockfalse ufw-docker--list webapp 5000 tcp default
+    @ignore echo
 
     load-ufw-docker-function ufw-docker--add-rule
     ufw-docker--add-rule webapp 172.18.0.4 5000 tcp default
@@ -510,6 +509,7 @@ test-ufw-docker--add-rule-modify-an-existing-rule() {
     @mocktrue ufw-docker--list webapp 5000 tcp default
     @mock ufw --dry-run route allow proto tcp from any to 172.18.0.4 port 5000 comment "allow webapp 5000/tcp default" === @echo
     @mockfalse grep "^Skipping"
+    @ignore echo
 
     load-ufw-docker-function ufw-docker--add-rule
     ufw-docker--add-rule webapp 172.18.0.4 5000 tcp default
@@ -525,6 +525,7 @@ test-IPv6-ufw-docker--add-rule-modify-an-existing-rule() {
     @mocktrue ufw-docker--list webapp/v6 5000 tcp default
     @mock ufw --dry-run route allow proto tcp from any to fd00:cf::42 port 5000 comment "allow webapp/v6 5000/tcp default" === @echo
     @mockfalse grep "^Skipping"
+    @ignore echo
 
     load-ufw-docker-function ufw-docker--add-rule
     ufw-docker--add-rule webapp/v6 fd00:cf::42 5000 tcp default
@@ -540,6 +541,7 @@ test-ufw-docker--add-rule-skip-an-existing-rule() {
     @mocktrue ufw-docker--list webapp 5000 tcp ""
     @mocktrue ufw --dry-run route allow proto tcp from any to 172.18.0.4 port 5000 comment "allow webapp 5000/tcp"
     @mocktrue grep "^Skipping"
+    @ignore echo
 
     load-ufw-docker-function ufw-docker--add-rule
     ufw-docker--add-rule webapp 172.18.0.4 5000 tcp ""
@@ -553,6 +555,7 @@ test-ufw-docker--add-rule-modify-an-existing-rule-without-port() {
     @mocktrue ufw-docker--list webapp "" tcp ""
     @mock ufw --dry-run route allow proto tcp from any to 172.18.0.4 comment "allow webapp" === @echo
     @mockfalse grep "^Skipping"
+    @ignore echo
 
     load-ufw-docker-function ufw-docker--add-rule
 
@@ -568,7 +571,7 @@ test-ufw-docker--add-rule-modify-an-existing-rule-without-port-assert() {
 test-ufw-docker--instance-name-found-a-name() {
     @mock docker inspect --format="{{.Name}}" foo
     @mock sed -e 's,^/,,'
-    @mockfalse grep "^$GREP_REGEXP_INSTANCE_NAME\$"
+    @mockfalse grep "^$GREP_REGEXP_NAME\$"
 
     @mock echo -n foo
 
@@ -584,77 +587,151 @@ test-ufw-docker--instance-name-found-a-name-assert() {
 test-ufw-docker--instance-name-found-an-id() {
     @mock docker inspect --format="{{.Name}}" fooid
     @mock sed -e 's,^/,,'
-    @mockfalse grep "^$GREP_REGEXP_INSTANCE_NAME\$"
+    @mockfalse grep "^$GREP_REGEXP_NAME\$"
+    @mock echo -n fooid
 
     load-ufw-docker-function ufw-docker--instance-name
     ufw-docker--instance-name fooid
 }
 test-ufw-docker--instance-name-found-an-id-assert() {
     docker inspect --format="{{.Name}}" fooid
+    @dryrun echo -n fooid
 }
 
+function mock-ufw-status-numbered-foo() {
+    @mock ufw status numbered === @echo "Status: active
+
+     To                         Action      From
+     --                         ------      ----
+[ 1] OpenSSH                    ALLOW IN    Anywhere
+[ 2] Anywhere                   ALLOW IN    192.168.56.128/28
+[ 3] 172.17.0.3 80/tcp          ALLOW FWD   Anywhere                   # allow foo 80/tcp bridge
+[ 4] 172.20.0.3 80/tcp          ALLOW FWD   Anywhere                   # allow bar 80/tcp bar-external
+[ 5] 172.17.0.3 53/udp          ALLOW FWD   Anywhere                   # allow foo 53/udp foo-internal
+[ 6] 172.17.0.3 53/tcp          ALLOW FWD   Anywhere                   # allow foo 53/tcp
+[ 7] 172.18.0.2 29090/tcp       ALLOW FWD   Anywhere                   # allow id111111 29090/tcp
+[ 8] 172.18.0.2 48080/tcp       ALLOW FWD   Anywhere                   # allow id222222 48080/tcp
+[ 9] 172.18.0.2 40080/tcp       ALLOW FWD   Anywhere                   # allow id333333 40080/tcp
+[10] OpenSSH (v6)               ALLOW IN    Anywhere (v6)
+[11] Anywhere (v6)              ALLOW IN    fd00:a:b:0:cafe::/80
+[12] fd00:a:b:deaf::3 80/tcp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 80/tcp bridge
+[13] fd05:8f23:c937:2::3 80/tcp ALLOW FWD   Anywhere (v6)              # allow bar/v6 80/tcp bar-external
+[14] fd00:a:b:deaf::3 53/udp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 53/udp foo-internal
+[15] fd00:a:b:deaf::3 53/tcp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 53/tcp
+"
+
+}
+
+test-ufw-docker--status() {
+    mock-ufw-status-numbered-foo
+    @allow-real grep '# allow [-_.[:alnum:]]\+\(/v6\)\?\( [[:digit:]]\+/\(tcp\|udp\)\( [-_.[:alnum:]]\+\)\?\)\?$'
+
+    load-ufw-docker-function ufw-docker--list
+    load-ufw-docker-function ufw-docker--status
+    ufw-docker--status
+}
+test-ufw-docker--status-assert() {
+    test-ufw-docker--list-all-assert
+}
+
+test-ufw-docker--list-all() {
+    mock-ufw-status-numbered-foo
+    @allow-real grep '# allow [-_.[:alnum:]]\+\(/v6\)\?\( [[:digit:]]\+/\(tcp\|udp\)\( [-_.[:alnum:]]\+\)\?\)\?$'
+
+    load-ufw-docker-function ufw-docker--list
+    ufw-docker--list
+}
+test-ufw-docker--list-all-assert() {
+    @stdout "[ 3] 172.17.0.3 80/tcp          ALLOW FWD   Anywhere                   # allow foo 80/tcp bridge"
+    @stdout "[ 4] 172.20.0.3 80/tcp          ALLOW FWD   Anywhere                   # allow bar 80/tcp bar-external"
+    @stdout "[ 5] 172.17.0.3 53/udp          ALLOW FWD   Anywhere                   # allow foo 53/udp foo-internal"
+    @stdout "[ 6] 172.17.0.3 53/tcp          ALLOW FWD   Anywhere                   # allow foo 53/tcp"
+    @stdout "[ 7] 172.18.0.2 29090/tcp       ALLOW FWD   Anywhere                   # allow id111111 29090/tcp"
+    @stdout "[ 8] 172.18.0.2 48080/tcp       ALLOW FWD   Anywhere                   # allow id222222 48080/tcp"
+    @stdout "[ 9] 172.18.0.2 40080/tcp       ALLOW FWD   Anywhere                   # allow id333333 40080/tcp"
+    @stdout "[12] fd00:a:b:deaf::3 80/tcp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 80/tcp bridge"
+    @stdout "[13] fd05:8f23:c937:2::3 80/tcp ALLOW FWD   Anywhere (v6)              # allow bar/v6 80/tcp bar-external"
+    @stdout "[14] fd00:a:b:deaf::3 53/udp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 53/udp foo-internal"
+    @stdout "[15] fd00:a:b:deaf::3 53/tcp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 53/tcp"
+}
 
 test-ufw-docker--list-name() {
-    @mocktrue ufw status numbered
-    @mockfalse grep "# allow foo\\( [[:digit:]]\\+\\/\\(tcp\\|udp\\)\\)\\( [[:graph:]]*\\)\$"
-    @mockfalse grep "# allow foo\\( [[:digit:]]\\+\\/\\(tcp\\|udp\\)\\)\$"
+    mock-ufw-status-numbered-foo
+    @allow-real grep '# allow foo\(/v6\)\?\( [[:digit:]]\+/\(tcp\|udp\)\( [-_.[:alnum:]]\+\)\?\)\?$'
 
     load-ufw-docker-function ufw-docker--list
     ufw-docker--list foo
 }
 test-ufw-docker--list-name-assert() {
-    grep "# allow foo\$"
+    @stdout "[ 3] 172.17.0.3 80/tcp          ALLOW FWD   Anywhere                   # allow foo 80/tcp bridge"
+    @stdout "[ 5] 172.17.0.3 53/udp          ALLOW FWD   Anywhere                   # allow foo 53/udp foo-internal"
+    @stdout "[ 6] 172.17.0.3 53/tcp          ALLOW FWD   Anywhere                   # allow foo 53/tcp"
+    @stdout "[12] fd00:a:b:deaf::3 80/tcp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 80/tcp bridge"
+    @stdout "[14] fd00:a:b:deaf::3 53/udp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 53/udp foo-internal"
+    @stdout "[15] fd00:a:b:deaf::3 53/tcp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 53/tcp"
 }
 
 test-ufw-docker--list-name-udp() {
-    @mocktrue ufw status numbered
+    mock-ufw-status-numbered-foo
+    @allow-real grep '# allow foo\(/v6\)\? [[:digit:]]\+/udp\( [-_.[:alnum:]]\+\)\?$'
+
     load-ufw-docker-function ufw-docker--list
     ufw-docker--list foo "" udp
 }
 test-ufw-docker--list-name-udp-assert() {
-    grep "# allow foo\\( [[:digit:]]\\+\\/\\(tcp\\|udp\\)\\)\\( [[:graph:]]*\\)\$"
+    @stdout "[ 5] 172.17.0.3 53/udp          ALLOW FWD   Anywhere                   # allow foo 53/udp foo-internal"
+    @stdout "[14] fd00:a:b:deaf::3 53/udp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 53/udp foo-internal"
 }
 
 
-test-ufw-docker--list-name-80() {
-    @mocktrue ufw status numbered
+test-ufw-docker--list-name-80-_-bridge() {
+    mock-ufw-status-numbered-foo
+    @allow-real grep '# allow foo\(/v6\)\? 80/tcp bridge$'
+
+    load-ufw-docker-function ufw-docker--list
+    ufw-docker--list foo 80 "" bridge
+}
+test-ufw-docker--list-name-80-_-bridge-assert() {
+    @stdout "[ 3] 172.17.0.3 80/tcp          ALLOW FWD   Anywhere                   # allow foo 80/tcp bridge"
+    @stdout "[12] fd00:a:b:deaf::3 80/tcp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 80/tcp bridge"
+}
+
+
+test-ufw-docker--list-name-53-udp() {
+    mock-ufw-status-numbered-foo
+    @allow-real grep '# allow foo\(/v6\)\? 53/udp\( [-_.[:alnum:]]\+\)\?$'
+
+    load-ufw-docker-function ufw-docker--list
+    ufw-docker--list foo 53 udp
+}
+test-ufw-docker--list-name-53-udp-assert() {
+    @stdout "[ 5] 172.17.0.3 53/udp          ALLOW FWD   Anywhere                   # allow foo 53/udp foo-internal"
+    @stdout "[14] fd00:a:b:deaf::3 53/udp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 53/udp foo-internal"
+}
+
+
+test-ufw-docker--list-grep-with-incorrect-network() {
+    mock-ufw-status-numbered-foo
+    @allow-real grep '# allow foo\(/v6\)\? 53/udp incorrect-network$'
+
+    load-ufw-docker-function ufw-docker--list
+    ufw-docker--list foo 53 udp incorrect-network
+}
+test-ufw-docker--list-grep-with-incorrect-network-assert() {
+    @fail
+}
+
+
+test-ufw-docker--list-foo-80-_-_() {
+    mock-ufw-status-numbered-foo
+    @allow-real grep '# allow foo\(/v6\)\? 80/tcp\( [-_.[:alnum:]]\+\)\?$'
+
     load-ufw-docker-function ufw-docker--list
     ufw-docker--list foo 80
 }
-test-ufw-docker--list-name-80-assert() {
-    grep "# allow foo\\( 80\\/tcp\\)\\( [[:graph:]]*\\)\$"
-}
-
-
-test-ufw-docker--list-name-80-udp() {
-    @mocktrue ufw status numbered
-    load-ufw-docker-function ufw-docker--list
-    ufw-docker--list foo 80 udp
-}
-test-ufw-docker--list-name-80-udp-assert() {
-    grep "# allow foo\\( 80\\/udp\\)\\( [[:graph:]]*\\)\$"
-}
-
-
-test-ufw-docker--list-grep-without-network() {
-    @mocktrue ufw status numbered
-    load-ufw-docker-function ufw-docker--list
-    ufw-docker--list foo 80 udp
-}
-test-ufw-docker--list-grep-without-network-assert() {
-    grep "# allow foo\\( 80\\/udp\\)\\( [[:graph:]]*\\)\$"
-}
-
-
-test-ufw-docker--list-grep-without-network-and-port() {
-    @mocktrue ufw status numbered
-    @mockfalse grep "# allow foo\\( 80\\/tcp\\)\\( [[:graph:]]*\\)\$"
-
-    load-ufw-docker-function ufw-docker--list
-    ufw-docker--list foo 80
-}
-test-ufw-docker--list-grep-without-network-and-port-assert() {
-    grep "# allow foo\\( 80\\/tcp\\)\$"
+test-ufw-docker--list-foo-80-_-_-assert() {
+    @stdout "[ 3] 172.17.0.3 80/tcp          ALLOW FWD   Anywhere                   # allow foo 80/tcp bridge"
+    @stdout "[12] fd00:a:b:deaf::3 80/tcp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 80/tcp bridge"
 }
 
 
@@ -684,6 +761,7 @@ test-ufw-docker--delete-empty-result-assert() {
 test-ufw-docker--delete-all() {
     @mock ufw-docker--list-number webapp 80 tcp === @stdout 5 8 9
     @mockpipe sort -rn
+    @ignore echo
 
     load-ufw-docker-function ufw-docker--delete
     ufw-docker--delete webapp 80 tcp
@@ -692,4 +770,92 @@ test-ufw-docker--delete-all-assert() {
     ufw delete 5
     ufw delete 8
     ufw delete 9
+}
+
+test-ufw-docker--check-install_ipv4() {
+    @mock mktemp === @stdout /tmp/after_rules_tmp
+    @mock sed "/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d" /etc/ufw/after.rules
+    @mock tee "/tmp/after_rules_tmp"
+    @capture tee -a /tmp/after_rules_tmp
+    @allow-real cat
+
+    load-ufw-docker-function ufw-docker--check-install
+    ufw-docker--check-install
+}
+test-ufw-docker--check-install_ipv4-assert() {
+    rm-on-exit /tmp/after_rules_tmp
+    sed "/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d" /etc/ufw/after.rules
+    @assert-capture tee -a /tmp/after_rules_tmp <<\EOF
+# BEGIN UFW AND DOCKER
+*filter
+:ufw-user-forward - [0:0]
+:ufw-docker-logging-deny - [0:0]
+:DOCKER-USER - [0:0]
+-A DOCKER-USER -j ufw-user-forward
+
+-A DOCKER-USER -j RETURN -s 10.0.0.0/8
+-A DOCKER-USER -j RETURN -s 172.16.0.0/12
+-A DOCKER-USER -j RETURN -s 192.168.0.0/16
+
+-A DOCKER-USER -p udp -m udp --sport 53 --dport 1024:65535 -j RETURN
+
+-A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 10.0.0.0/8
+-A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 172.16.0.0/12
+-A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 192.168.0.0/16
+-A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 10.0.0.0/8
+-A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 172.16.0.0/12
+-A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 192.168.0.0/16
+
+-A DOCKER-USER -j RETURN
+
+-A ufw-docker-logging-deny -m limit --limit 3/min --limit-burst 10 -j LOG --log-prefix "[UFW DOCKER BLOCK] "
+-A ufw-docker-logging-deny -j DROP
+
+COMMIT
+# END UFW AND DOCKER
+EOF
+    diff -u --color=auto /etc/ufw/after.rules /tmp/after_rules_tmp
+}
+
+test-ufw-docker--check-install_ipv4-subnets() {
+    @mock ufw-docker--list-docker-subnets IPv4 192.168.56.128/28 172.16.0.0/12 === @stdout "172.16.0.0/12" "192.168.56.128/28"
+    @mock mktemp === @stdout /tmp/after_rules_tmp
+    @mock sed "/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d" /etc/ufw/after.rules
+    @mock tee "/tmp/after_rules_tmp"
+    @capture tee -a /tmp/after_rules_tmp
+    @allow-real cat
+
+    load-ufw-docker-function ufw-docker--check-install
+    ufw-docker--check-install --docker-subnets 192.168.56.128/28 172.16.0.0/12
+}
+test-ufw-docker--check-install_ipv4-subnets-assert() {
+    rm-on-exit /tmp/after_rules_tmp
+    sed "/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d" /etc/ufw/after.rules
+    @assert-capture tee -a /tmp/after_rules_tmp <<\EOF
+# BEGIN UFW AND DOCKER
+*filter
+:ufw-user-forward - [0:0]
+:ufw-docker-logging-deny - [0:0]
+:DOCKER-USER - [0:0]
+-A DOCKER-USER -j ufw-user-forward
+
+-A DOCKER-USER -j RETURN -s 172.16.0.0/12
+-A DOCKER-USER -j RETURN -s 192.168.56.128/28
+
+-A DOCKER-USER -p udp -m udp --sport 53 --dport 1024:65535 -j RETURN
+
+-A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 172.16.0.0/12
+-A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 192.168.56.128/28
+-A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 172.16.0.0/12
+-A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 192.168.56.128/28
+
+-A DOCKER-USER -j RETURN
+
+-A ufw-docker-logging-deny -m limit --limit 3/min --limit-burst 10 -j LOG --log-prefix "[UFW DOCKER BLOCK] "
+-A ufw-docker-logging-deny -j DROP
+
+COMMIT
+# END UFW AND DOCKER
+EOF
+    diff -u --color=auto /etc/ufw/after.rules /tmp/after_rules_tmp
 }

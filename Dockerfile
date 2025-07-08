@@ -1,6 +1,6 @@
 FROM ubuntu:24.04
 
-ARG docker_version="27.3.1"
+ARG docker_version="28.3.1"
 ARG use_iptables_legacy=false
 
 ENV DEBIAN_FRONTEND=noninteractive

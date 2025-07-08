@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-[[ -n "${DEBUG:-}" ]] && set -x
+[[ "${DEBUG:-}" = true ]] && set -x
 [[ 0 -eq "$#" ]] && set -- start
 
 ufw_docker_agent=ufw-docker-agent
@@ -10,8 +10,12 @@ function ufw-allow-or-deny-service() {
     declare id="$1"
     declare port="$2"
 
-    if [[ "$port" = deny ]]; then
-        run-ufw-docker delete allow "$id"
+    if [[ "$port" = deny || "$port" = */deny ]]; then
+        port="${port%deny}"
+        port="${port%/}"
+        declare -a opts=("$id")
+        [[ -z "$port" ]] || opts+=("$port")
+        run-ufw-docker delete allow "${opts[@]}"
     else
         run-ufw-docker add-service-rule "$id" "$port"
     fi
@@ -22,8 +26,14 @@ function update-ufw-rules() {
                      -e 's/^declare -x ufw_public_//' \
                      -e 's/="/ /' \
                      -e 's/"$//' |
-        while read -r id port; do
-            ufw-allow-or-deny-service "${id}" "${port#*/}"
+        while read -r id ruleset; do
+            declare -a rules=( $(tr ',' '\n' <<< "$ruleset") )
+            for rule in "${rules[@]}"; do
+                [[ "$rule" = */deny ]] && ufw-allow-or-deny-service "${id}" "${rule#*/}"
+            done
+            for rule in "${rules[@]}"; do
+                [[ "$rule" = */deny ]] || ufw-allow-or-deny-service "${id}" "${rule#*/}"
+            done
         done
 }
 

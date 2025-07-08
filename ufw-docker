@@ -2,16 +2,20 @@
 set -euo pipefail
 [[ -n "${DEBUG:-}" ]] && set -x
 
-LANG=en_US.UTF-8
-LANGUAGE=en_US:
-LC_ALL=en_US.UTF-8
+# UFW-DOCKER GLOBAL VARIABLES START #
+LC_ALL=C
 PATH="/bin:/usr/bin:/sbin:/usr/sbin:/snap/bin/"
 
-GREP_REGEXP_INSTANCE_NAME="[-_.[:alnum:]]\\+"
+GREP_REGEXP_NAME="[-_.[:alnum:]]\\+"
 DEFAULT_PROTO=tcp
+ENV_VALUE_SPLITTER=','
 
 ufw_docker_agent=ufw-docker-agent
 ufw_docker_agent_image="${UFW_DOCKER_AGENT_IMAGE:-chaifeng/${ufw_docker_agent}:250702-nf_tables}"
+
+after_rules="/etc/ufw/after.rules"
+after6_rules="/etc/ufw/after6.rules"
+# UFW-DOCKER GLOBAL VARIABLES END #
 
 if [[ "${ufw_docker_agent_image}" = *-@(legacy|nf_tables) ]]; then
     if iptables --version | grep -F '(legacy)' &>/dev/null; then
@@ -24,31 +28,37 @@ fi
 test -n "$ufw_docker_agent_image"
 
 function ufw-docker--status() {
-    ufw-docker--list "$GREP_REGEXP_INSTANCE_NAME\(/v6\)\?"
+    ufw-docker--list
 }
 
 function ufw-docker--list() {
-    local INSTANCE_NAME="$1"
+    local INSTANCE_NAME="${1:-}"
     local INSTANCE_PORT="${2:-}"
-    local PROTO="${3:-${DEFAULT_PROTO}}"
+    local PROTO="${3:-}"
     local NETWORK="${4:-}"
     local params_count="$#"
+    local _grep_regexp
 
-    if [[ -z "$INSTANCE_PORT" ]]; then
+    [[ -n "${INSTANCE_NAME:-}" ]] || INSTANCE_NAME="$GREP_REGEXP_NAME"
+    if [[ -z "${INSTANCE_PORT:-}" && -z "${PROTO:-}" && -z "${NETWORK-}" ]]; then
         INSTANCE_PORT="[[:digit:]]\\+"
-        PROTO="\\(tcp\\|udp\\)"
-    fi
-
-    if [[ -z "$NETWORK" ]]; then
-       NETWORK="[[:graph:]]*"
+        [[ -n "${PROTO:-}" ]] || PROTO="\\(tcp\\|udp\\)"
+        _grep_regexp="\\( ${INSTANCE_PORT}/${PROTO}\\( ${GREP_REGEXP_NAME}\\)\\?\\)\\?"
+    else
+        [[ -n "${INSTANCE_PORT:-}" ]] || INSTANCE_PORT="[[:digit:]]\\+"
+        [[ -n "${PROTO:-}" ]] || PROTO="${DEFAULT_PROTO}"
+        if [[ -n "${NETWORK:-}" ]]; then
+            NETWORK=" ${NETWORK}"
+        else
+            NETWORK="\\( ${GREP_REGEXP_NAME}\\)\\?"
+        fi
+        _grep_regexp=" ${INSTANCE_PORT}/${PROTO}${NETWORK}"
     fi
 
     local ufw_output
     ufw_output="$(ufw status numbered)"
 
-    grep "# allow ${INSTANCE_NAME}\\( ${INSTANCE_PORT}\\/${PROTO}\\)\\( ${NETWORK}\\)\$" <<< "$ufw_output" ||
-        grep "# allow ${INSTANCE_NAME}\\( ${INSTANCE_PORT}\\/${PROTO}\\)\$" <<< "$ufw_output" ||
-        grep "# allow ${INSTANCE_NAME}\$" <<< "$ufw_output"
+    grep "# allow ${INSTANCE_NAME}\\(/v6\\)\\?${_grep_regexp}\$" <<< "$ufw_output"
 }
 
 function ufw-docker--list-number() {
@@ -155,7 +165,7 @@ function ufw-docker--instance-name() {
     {
         {
             docker inspect --format='{{.Name}}' "$INSTANCE_ID" 2>/dev/null | sed -e 's,^/,,' |
-                grep "^${GREP_REGEXP_INSTANCE_NAME}\$" 2>/dev/null
+                grep "^${GREP_REGEXP_NAME}\$" 2>/dev/null
         } || echo -n "$INSTANCE_ID";
     } | remove_blank_lines
 }
@@ -171,7 +181,7 @@ function ufw-docker--service() {
             shift || true
             declare service_id_or_name="${1:?Missing swarm service name or service ID}"
 
-            "ufw-docker--service-${service_action}" "${service_id_or_name}"
+            "ufw-docker--service-${service_action}" "$@"
             ;;
         allow)
             shift || true
@@ -221,22 +231,24 @@ function ufw-docker--service-allow() {
     declare service_id
     service_id="$(ufw-docker--get-service-id "${service_name}")"
     [[ -z "${service_id:-}" ]] && die "Could not find service \"$service_name\""
-
     service_name="$(ufw-docker--get-service-name "${service_name}")"
 
+    declare env_value= published_port= target_port=
     exec 9< <(ufw-docker--list-service-ports "$service_name")
-    while read -u 9 -r port target_port; do
+    while read -u 9 -r published_port target_port; do
         if [[ "$target_port" = "${service_port}/${service_proto}" ]]; then
-            declare service_env="ufw_public_${service_id}=${service_name}/${port}/${service_proto}"
+            env_value="${service_name}/${published_port}/${service_proto}"
             break;
         fi
     done
     exec 9<&-
 
-    [[ -z "${service_env:-}" ]] && die "Service $service_name does not publish port $service_port."
+    [[ -z "${env_value:-}" ]] && die "Service $service_name does not publish port $service_port."
 
+    declare service_env
     if ! docker service inspect "$ufw_docker_agent" &>/dev/null; then
         err "Not found ufw-docker-agent service, creating ..."
+        service_env="ufw_public_${service_id}=${env_value}"
         docker service create --name "$ufw_docker_agent" --mode global \
                --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock \
                --mount type=bind,source=/etc/ufw,target=/etc/ufw,readonly=true \
@@ -245,15 +257,20 @@ function ufw-docker--service-allow() {
                --env "${service_env}" \
                "${ufw_docker_agent_image}"
     else
-        declare -a service_env_list
-        service_env_list+=(--env-add "${service_env}")
-
+        declare -a value_list=() service_env_list=()
         exec 8< <(ufw-docker--get-env-list)
         while read -u 8 -r id value; do
-            [[ "$id" = "$service_id" ]] && continue
-            [[ "$value" = "${service_name}"/* ]] && service_env_list+=(--env-rm "ufw_public_${id}")
+            [[ "$id" != "$service_id" && "$value" = "${service_name}"/* ]] && service_env_list+=(--env-rm "ufw_public_${id}")
+            [[ "$id" = "$service_id" ]] || continue
+            [[ "${value}" = "${env_value}" || "${value}" = "${env_value}"/* ]] ||
+                value_list+=("${value}")
         done
         exec 8<&-
+        value_list=("${env_value}" "${value_list[@]}")
+
+        service_env="ufw_public_${service_id}=$(IFS="${ENV_VALUE_SPLITTER}"; printf '%s' "${value_list[*]}")"
+
+        service_env_list+=(--env-add "${service_env}")
 
         docker service update --update-parallelism=0 \
                --env-add ufw_docker_agent_image="${ufw_docker_agent_image}" \
@@ -269,24 +286,57 @@ function ufw-docker--get-env-list() {
            --format '{{range $k,$v := .Spec.TaskTemplate.ContainerSpec.Env}}{{ $v }}{{"\n"}}{{end}}' |
         sed -e '/^ufw_public_/!d' \
             -e 's/^ufw_public_//' \
-            -e 's/=/ /'
+            -e 's/=/ /' |
+        while read -r id value; do
+            tr ',' '\n' <<< "$value" | sed "s/^/${id} /g"
+        done
 }
 
 function ufw-docker--service-delete() {
     declare service_name="$1"
+    declare service_port="${2:-}"
+    declare port proto
+    if [[ "${service_port:-}" = */* ]]; then
+        port="${service_port%/*}"
+        proto="${service_port#*/}"
+    elif [[ -n "${service_port:-}" ]]; then
+        port="$service_port"
+        proto="$DEFAULT_PROTO"
+    fi
 
+    declare service_id
+    service_id="$(ufw-docker--get-service-id "${service_name}")"
+    [[ -z "${service_id:-}" ]] && die "Could not find service \"$service_name\""
+    service_name="$(ufw-docker--get-service-name "${service_name}")"
+
+    declare env_value= published_port= target_port=
+    if [[ -n "${port:-}" ]]; then
+        exec 9< <(ufw-docker--list-service-ports "$service_name")
+        while read -u 9 -r published_port target_port; do
+            if [[ "$target_port" = "${port}/${proto}" ]]; then
+                env_value="${service_name}/${published_port}/${proto}"
+                break;
+            fi
+        done
+        exec 9<&-
+        [[ -n "${env_value:-}" ]] || die "Service $service_name does not publish port $service_port."
+    else
+        declare env_value="${service_name}"
+    fi
+
+    declare id value
+    declare -a value_list=()
     exec 8< <(ufw-docker--get-env-list)
     while read -u 8 -r id value; do
-        if [[ "$id" = "$service_name" ]] || [[ "$value" = "${service_name}"/* ]]; then
-            declare service_id="$id"
-            service_name="${value%%/*}"
-            declare service_env="ufw_public_${service_id}=${service_name}/deny"
-            break;
-        fi
+        [[ "$id" = "$service_id" ]] || continue
+        [[ "${value}" = "${env_value}" || "${value}" = "${env_value}"/* ]] ||
+            value_list+=("${value}")
     done
     exec 8<&-
+    value_list=("${env_value}/deny" "${value_list[@]}")
 
-    [[ -z "${service_env:-}" ]] && die "Could not find service \"$service_name\""
+    declare service_env
+    service_env="ufw_public_${service_id}=$(IFS="${ENV_VALUE_SPLITTER}"; printf '%s' "${value_list[*]}")"
 
     docker service update --update-parallelism=0 \
            --env-add ufw_docker_agent_image="${ufw_docker_agent_image}" \
@@ -299,9 +349,6 @@ function ufw-docker--service-delete() {
 function ufw-docker--raw-command() {
     ufw "$@"
 }
-
-after_rules="/etc/ufw/after.rules"
-after6_rules="/etc/ufw/after6.rules"
 
 function ufw-docker--check() {
     err "\\n########## iptables -n -L DOCKER-USER ##########"
@@ -370,7 +417,7 @@ function ufw-docker--check-install() {
     after_rules_tmp="${after_rules_tmp:-$(mktemp)}"
     rm-on-exit "$after_rules_tmp"
 
-    sed "/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d" "$after_rules" > "$after_rules_tmp"
+    sed "/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d" "$after_rules" | tee "$after_rules_tmp" >/dev/null
     {
         cat <<-\EOF
 	# BEGIN UFW AND DOCKER
@@ -409,7 +456,7 @@ function ufw-docker--check-install() {
 	COMMIT
 	# END UFW AND DOCKER
 	EOF
-    } >> "${after_rules_tmp}"
+    } | tee -a "${after_rules_tmp}" >/dev/null
     diff -u --color=auto "$after_rules" "$after_rules_tmp"
 }
 
@@ -430,7 +477,7 @@ function ufw-docker--check-install_ipv6() {
     after6_rules_tmp="${after6_rules_tmp:-$(mktemp)}"
     rm-on-exit "$after6_rules_tmp"
 
-    sed "/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d" "$after6_rules" > "$after6_rules_tmp"
+    sed "/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d" "$after6_rules" | tee "$after6_rules_tmp" >/dev/null
     {
         cat <<-\EOF
 	# BEGIN UFW AND DOCKER
@@ -465,7 +512,7 @@ function ufw-docker--check-install_ipv6() {
 	COMMIT
 	# END UFW AND DOCKER
 	EOF
-    } >> "${after6_rules_tmp}"
+    } | tee -a "${after6_rules_tmp}"
     diff -u --color=auto "$after6_rules" "$after6_rules_tmp"
 }
 
@@ -624,7 +671,7 @@ case "$ufw_action" in
         INSTANCE_PORT="${INSTANCE_PORT%/*}"
         ;;&
     delete|list)
-        "ufw-docker--$ufw_action" "$INSTANCE_NAME\\(/v6\\)\\?" "$INSTANCE_PORT" "$PROTO" "$NETWORK"
+        "ufw-docker--$ufw_action" "$INSTANCE_NAME" "$INSTANCE_PORT" "$PROTO" "$NETWORK"
         ;;
     allow)
         "ufw-docker--$ufw_action" "$INSTANCE_NAME" "$INSTANCE_PORT" "$PROTO" "$NETWORK"

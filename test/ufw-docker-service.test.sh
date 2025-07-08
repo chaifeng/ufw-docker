@@ -6,9 +6,8 @@ source "$working_dir"/bach/bach.sh
 
 @setup {
     set -euo pipefail
-
     ufw_docker_agent=ufw-docker-agent
-    ufw_docker_agent_image=chaifeng/ufw-docker-agent:181005
+    ufw_docker_agent_image=chaifeng/ufw-docker-agent:090502
 }
 
 @setup-test {
@@ -19,9 +18,17 @@ source "$working_dir"/bach/bach.sh
     @ignore echo
     @ignore err
 
-    DEFAULT_PROTO=tcp
-    GREP_REGEXP_INSTANCE_NAME="[-_.[:alnum:]]\\+"
+    UFW_DOCKER_AGENT_IMAGE=chaifeng/ufw-docker-agent:090502
+    builtin source <(@sed -n -e '/^# UFW-DOCKER GLOBAL VARIABLES START #$/,/^# UFW-DOCKER GLOBAL VARIABLES END #$/{' -e '/^PATH=/d' -e 'p' -e '}' "$working_dir/../ufw-docker")
+
     DEBUG=false
+
+    unset RANDOM
+    RANDOM=42
+
+    @allow-real sed -e '/^ufw_public_/!d' -e 's/^ufw_public_//' -e 's/=/ /'
+    @allow-real tr ',' '\n'
+    @allow-real grep -E '^[0-9]+(/(tcp|udp))?$'
 }
 
 function die() {
@@ -110,6 +117,26 @@ test-ufw-docker--service-delete-allow-webapp-assert() {
 }
 
 
+test-ufw-docker--service-delete-allow-webapp-8080-tcp() {
+    load-ufw-docker-function ufw-docker--service
+
+    ufw-docker--service delete allow webapp 8080/tcp
+}
+test-ufw-docker--service-delete-allow-webapp-8080-tcp-assert() {
+    ufw-docker--service-delete webapp 8080/tcp
+}
+
+
+test-ufw-docker--service-delete-allow-webapp-8080() {
+    load-ufw-docker-function ufw-docker--service
+
+    ufw-docker--service delete allow webapp 8080
+}
+test-ufw-docker--service-delete-allow-webapp-8080-assert() {
+    ufw-docker--service-delete webapp 8080
+}
+
+
 test-ufw-docker--get-service-id() {
     load-ufw-docker-function ufw-docker--get-service-id
     ufw-docker--get-service-id database
@@ -129,8 +156,6 @@ test-ufw-docker--get-service-name-assert() {
 
 
 test-ufw-docker--service-allow-invalid-port-syntax() {
-    @mockfalse grep -E '^[0-9]+(/(tcp|udp))?$'
-
     load-ufw-docker-function ufw-docker--service-allow
     ufw-docker--service-allow webapp invalid-port
 }
@@ -141,7 +166,6 @@ test-ufw-docker--service-allow-invalid-port-syntax-assert() {
 
 
 test-ufw-docker--service-allow-an-non-existed-service() {
-    @mocktrue grep -E '^[0-9]+(/(tcp|udp))?$'
     @mock ufw-docker--get-service-id web404 === @stdout ""
 
     load-ufw-docker-function ufw-docker--service-allow
@@ -154,7 +178,6 @@ test-ufw-docker--service-allow-an-non-existed-service-assert() {
 
 
 test-ufw-docker--service-allow-a-service-without-ports-published() {
-    @mocktrue grep -E '^[0-9]+(/(tcp|udp))?$'
     @mock ufw-docker--get-service-id private-web === @stdout abcd1234
     @mock ufw-docker--get-service-name private-web === @stdout private-web
     @mock ufw-docker--list-service-ports private-web === @stdout ""
@@ -169,7 +192,6 @@ test-ufw-docker--service-allow-a-service-without-ports-published-assert() {
 
 
 test-ufw-docker--service-allow-a-service-while-agent-not-running() {
-    @mocktrue grep -E '^[0-9]+(/(tcp|udp))?$'
     @mock ufw-docker--get-service-id webapp === @stdout abcd1234
     @mock ufw-docker--get-service-name webapp === @stdout webapp
     @mock ufw-docker--list-service-ports webapp === @stdout "53 53/udp" "80 80/tcp" "8080 8080/tcp"
@@ -182,15 +204,14 @@ test-ufw-docker--service-allow-a-service-while-agent-not-running-assert() {
     docker service create --name ufw-docker-agent --mode global \
            --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock \
            --mount type=bind,source=/etc/ufw,target=/etc/ufw,readonly=true \
-           --env ufw_docker_agent_image="chaifeng/ufw-docker-agent:181005" \
+           --env ufw_docker_agent_image="chaifeng/ufw-docker-agent:090502" \
            --env DEBUG="false" \
            --env "ufw_public_abcd1234=webapp/80/tcp" \
-           "chaifeng/ufw-docker-agent:181005"
+           "chaifeng/ufw-docker-agent:090502"
 }
 
 
 test-ufw-docker--service-allow-a-service-add-new-env() {
-    @mocktrue grep -E '^[0-9]+(/(tcp|udp))?$'
     @mock ufw-docker--get-service-id webapp === @stdout abcd1234
     @mock ufw-docker--get-service-name webapp === @stdout webapp
     @mock ufw-docker--list-service-ports webapp === @stdout "53 53/udp" "80 80/tcp" "8080 8080/tcp"
@@ -202,16 +223,15 @@ test-ufw-docker--service-allow-a-service-add-new-env() {
 }
 test-ufw-docker--service-allow-a-service-add-new-env-assert() {
     docker service update --update-parallelism=0 \
-           --env-add ufw_docker_agent_image="chaifeng/ufw-docker-agent:181005" \
+           --env-add ufw_docker_agent_image="chaifeng/ufw-docker-agent:090502" \
            --env-add DEBUG="false" \
            --env-add "ufw_public_abcd1234=webapp/80/tcp" \
-           --image "chaifeng/ufw-docker-agent:181005" \
+           --image "chaifeng/ufw-docker-agent:090502" \
            ufw-docker-agent
 }
 
 
 test-ufw-docker--service-allow-a-service-update-a-env() {
-    @mocktrue grep -E '^[0-9]+(/(tcp|udp))?$'
     @mock ufw-docker--get-service-id webapp === @stdout abcd1234
     @mock ufw-docker--get-service-name webapp === @stdout webapp
     @mock ufw-docker--list-service-ports webapp === @stdout "53 53/udp" "80 80/tcp" "8080 8080/tcp"
@@ -223,11 +243,60 @@ test-ufw-docker--service-allow-a-service-update-a-env() {
 }
 test-ufw-docker--service-allow-a-service-update-a-env-assert() {
     docker service update --update-parallelism=0 \
-           --env-add ufw_docker_agent_image="chaifeng/ufw-docker-agent:181005" \
+           --env-add ufw_docker_agent_image="chaifeng/ufw-docker-agent:090502" \
            --env-add DEBUG="false" \
-           --env-add "ufw_public_abcd1234=webapp/80/tcp" \
            --env-rm "ufw_public_a_different_id" \
-           --image "chaifeng/ufw-docker-agent:181005" \
+           --env-add "ufw_public_abcd1234=webapp/80/tcp" \
+           --image "chaifeng/ufw-docker-agent:090502" \
+           ufw-docker-agent
+}
+
+
+test-ufw-docker--service-allow-a-service-add-value-to-an-env() {
+    @mock ufw-docker--get-service-id webapp === @stdout abcd1234
+    @mock ufw-docker--get-service-name webapp === @stdout webapp
+    @mock ufw-docker--list-service-ports webapp === @stdout "5353 53/udp" "8080 80/tcp" "18080 8080/tcp"
+    @mocktrue docker service inspect ufw-docker-agent
+    @mock ufw-docker--get-env-list === @stdout "a_different_id webapp/8080/tcp" "abcd1234 webapp/5353/udp"
+
+    load-ufw-docker-function ufw-docker--service-allow
+    ufw-docker--service-allow webapp 80/tcp
+    ufw-docker--service-allow webapp 8080/tcp
+}
+test-ufw-docker--service-allow-a-service-add-value-to-an-env-assert() {
+    docker service update --update-parallelism=0 \
+           --env-add ufw_docker_agent_image="chaifeng/ufw-docker-agent:090502" \
+           --env-add DEBUG="false" \
+           --env-rm "ufw_public_a_different_id" \
+           --env-add "ufw_public_abcd1234=webapp/8080/tcp,webapp/5353/udp" \
+           --image "chaifeng/ufw-docker-agent:090502" \
+           ufw-docker-agent
+    docker service update --update-parallelism=0 \
+           --env-add ufw_docker_agent_image="chaifeng/ufw-docker-agent:090502" \
+           --env-add DEBUG="false" \
+           --env-rm "ufw_public_a_different_id" \
+           --env-add "ufw_public_abcd1234=webapp/18080/tcp,webapp/5353/udp" \
+           --image "chaifeng/ufw-docker-agent:090502" \
+           ufw-docker-agent
+}
+
+test-ufw-docker--service-allow-a-service-denied-port() {
+    @mock ufw-docker--get-service-id webapp === @stdout abcd1234
+    @mock ufw-docker--get-service-name webapp === @stdout webapp
+    @mock ufw-docker--list-service-ports webapp === @stdout "5353 53/udp" "8080 80/tcp" "18080 8080/tcp"
+    @mocktrue docker service inspect ufw-docker-agent
+    @mock ufw-docker--get-env-list === @stdout "a_different_id webapp/8080/tcp" "abcd1234 webapp/8080/tcp/deny" "abcd1234 webapp/5353/udp"
+
+    load-ufw-docker-function ufw-docker--service-allow
+    ufw-docker--service-allow webapp 80/tcp
+}
+test-ufw-docker--service-allow-a-service-denied-port-assert() {
+    docker service update --update-parallelism=0 \
+           --env-add ufw_docker_agent_image="chaifeng/ufw-docker-agent:090502" \
+           --env-add DEBUG="false" \
+           --env-rm "ufw_public_a_different_id" \
+           --env-add "ufw_public_abcd1234=webapp/8080/tcp,webapp/5353/udp" \
+           --image "chaifeng/ufw-docker-agent:090502" \
            ufw-docker-agent
 }
 
@@ -236,27 +305,50 @@ test-ufw-docker--get-env-list() {
     @mock docker service inspect ufw-docker-agent \
           --format '{{range $k,$v := .Spec.TaskTemplate.ContainerSpec.Env}}{{ $v }}{{"\n"}}{{end}}' \
           === @stdout \
-              "ufw_docker_agent_image=192.168.56.130:5000/chaifeng/ufw-docker-agent:test" \
-              "DEBUG=true" \
-              "ufw_public_zv6esvmwnmmgnlauqn7m77jo4=webapp/9090/tcp" \
-              "OTHER_ENV=blabla"
+          "ufw_docker_agent_image=192.168.56.130:5000/chaifeng/ufw-docker-agent:test" \
+          "DEBUG=true" \
+          "ufw_public_id111111=webapp/9090/tcp" \
+          "ufw_public_id222222=foo/2222/udp" \
+          "OTHER_ENV=blabla"
 
-    @mock sed -e '/^ufw_public_/!d' \
-              -e 's/^ufw_public_//' \
-              -e 's/=/ /' === @real sed -e '/^ufw_public_/!d' \
-                                        -e 's/^ufw_public_//' \
-                                        -e 's/=/ /'
+    @allow-real sed "s/^/id111111 /g"
+    @allow-real sed "s/^/id222222 /g"
 
     load-ufw-docker-function ufw-docker--get-env-list
     ufw-docker--get-env-list
 }
 test-ufw-docker--get-env-list-assert() {
-    @stdout "zv6esvmwnmmgnlauqn7m77jo4 webapp/9090/tcp"
+    @stdout "id111111 webapp/9090/tcp"
+    @stdout "id222222 foo/2222/udp"
+}
+
+test-ufw-docker--get-env-list-multiple() {
+    @mock docker service inspect ufw-docker-agent \
+          --format '{{range $k,$v := .Spec.TaskTemplate.ContainerSpec.Env}}{{ $v }}{{"\n"}}{{end}}' \
+          === @stdout \
+          "ufw_docker_agent_image=192.168.56.130:5000/chaifeng/ufw-docker-agent:test" \
+          "DEBUG=true" \
+          "ufw_public_id111111=webapp/9090/tcp,webapp/8888/tcp,webapp/5555/udp" \
+          "ufw_public_id222222=foo/2222/udp,foo/3333/tcp" \
+          "OTHER_ENV=blabla"
+
+    @allow-real sed "s/^/id111111 /g"
+    @allow-real sed "s/^/id222222 /g"
+
+    load-ufw-docker-function ufw-docker--get-env-list
+    ufw-docker--get-env-list
+}
+test-ufw-docker--get-env-list-multiple-assert() {
+    @stdout "id111111 webapp/9090/tcp"
+    @stdout "id111111 webapp/8888/tcp"
+    @stdout "id111111 webapp/5555/udp"
+    @stdout "id222222 foo/2222/udp"
+    @stdout "id222222 foo/3333/tcp"
 }
 
 
 test-ufw-docker--service-delete-no-matches() {
-    @mock ufw-docker--get-env-list === @stdout "ffff111 foo/80/tcp" "eeee2222 bar/53/udp"
+    @mockfalse ufw-docker--get-service-id webapp
 
     load-ufw-docker-function ufw-docker--service-delete
     ufw-docker--service-delete webapp
@@ -266,9 +358,15 @@ test-ufw-docker--service-delete-no-matches-assert() {
     @fail
 }
 
+function mock-abcd1234-webapp() {
+    @mock ufw-docker--get-service-name webapp === @stdout webapp
+    @mock ufw-docker--get-service-id webapp === @stdout "abcd1234"
+    @mock ufw-docker--list-service-ports webapp === @stdout "22 2222/tcp" "80 8080/tcp" "53 5353/udp"
+}
 
 test-ufw-docker--service-delete-matches() {
-    @mock ufw-docker--get-env-list === @stdout "ffff111 foo/80/tcp" "eeee2222 bar/53/udp" "abcd1234 webapp/5000/tcp"
+    mock-abcd1234-webapp
+    @mock ufw-docker--get-env-list === @stdout "xxx 888/tcp" "abcd1234 webapp/22/tcp"
 
     load-ufw-docker-function ufw-docker--service-delete
     ufw-docker--service-delete webapp
@@ -282,10 +380,183 @@ test-ufw-docker--service-delete-matches-assert() {
            "${ufw_docker_agent}"
 }
 
+test-ufw-docker--service-delete-matches2() {
+    mock-abcd1234-webapp
+    @mock ufw-docker--get-env-list === @stdout "xxx 888/tcp" "abcd1234 webapp/22/tcp" "abcd1234 webapp/53/udp" "abcd1234 webapp/80/tcp"
+
+    load-ufw-docker-function ufw-docker--service-delete
+    ufw-docker--service-delete webapp
+}
+test-ufw-docker--service-delete-matches2-assert() {
+    docker service update --update-parallelism=0 \
+           --env-add ufw_docker_agent_image="${ufw_docker_agent_image}" \
+           --env-add "ufw_public_abcd1234=webapp/deny" \
+           --env-add "DEBUG=false" \
+           --image "${ufw_docker_agent_image}" \
+           "${ufw_docker_agent}"
+}
+
+
+test-ufw-docker--service-delete-matches-with-a-port() {
+    mock-abcd1234-webapp
+    @mock ufw-docker--get-env-list === @stdout "xxx 888/tcp" "abcd1234 webapp/80/tcp"
+
+    load-ufw-docker-function ufw-docker--service-delete
+    ufw-docker--service-delete webapp 8080
+}
+test-ufw-docker--service-delete-matches-with-a-port-assert() {
+    docker service update --update-parallelism=0 \
+           --env-add ufw_docker_agent_image="${ufw_docker_agent_image}" \
+           --env-add "ufw_public_abcd1234=webapp/80/tcp/deny" \
+           --env-add "DEBUG=false" \
+           --image "${ufw_docker_agent_image}" \
+           "${ufw_docker_agent}"
+}
+
+
+test-ufw-docker--service-delete-matches-with-a-port2() {
+    mock-abcd1234-webapp
+    @mock ufw-docker--get-env-list === @stdout "xxx 888/tcp" "abcd1234 webapp/80/tcp" "abcd1234 webapp/53/udp" "abcd1234 webapp/53/tcp"
+
+    load-ufw-docker-function ufw-docker--service-delete
+    ufw-docker--service-delete webapp 8080
+}
+test-ufw-docker--service-delete-matches-with-a-port2-assert() {
+    docker service update --update-parallelism=0 \
+           --env-add ufw_docker_agent_image="${ufw_docker_agent_image}" \
+           --env-add "ufw_public_abcd1234=webapp/80/tcp/deny,webapp/53/udp,webapp/53/tcp" \
+           --env-add "DEBUG=false" \
+           --image "${ufw_docker_agent_image}" \
+           "${ufw_docker_agent}"
+}
+
+
+test-ufw-docker--service-delete-matches-with-a-port-but-no-previous-rule() {
+    mock-abcd1234-webapp
+    @mock ufw-docker--get-env-list === @stdout "xxx 888/tcp" "abcd1234 webapp/53/tcp"
+
+    load-ufw-docker-function ufw-docker--service-delete
+    ufw-docker--service-delete webapp 2222
+}
+test-ufw-docker--service-delete-matches-with-a-port-but-no-previous-rule-assert() {
+    docker service update --update-parallelism=0 \
+           --env-add ufw_docker_agent_image="${ufw_docker_agent_image}" \
+           --env-add "ufw_public_abcd1234=webapp/22/tcp/deny,webapp/53/tcp" \
+           --env-add "DEBUG=false" \
+           --image "${ufw_docker_agent_image}" \
+           "${ufw_docker_agent}"
+}
+
+
+test-ufw-docker--service-delete-matches-with-a-port-proto-pair() {
+    mock-abcd1234-webapp
+    @mock ufw-docker--get-env-list === @stdout "xxx 888/tcp" "abcd1234 webapp/80/tcp"
+
+    load-ufw-docker-function ufw-docker--service-delete
+    ufw-docker--service-delete webapp 8080/tcp
+}
+test-ufw-docker--service-delete-matches-with-a-port-proto-pair-assert() {
+    docker service update --update-parallelism=0 \
+           --env-add ufw_docker_agent_image="${ufw_docker_agent_image}" \
+           --env-add "ufw_public_abcd1234=webapp/80/tcp/deny" \
+           --env-add "DEBUG=false" \
+           --image "${ufw_docker_agent_image}" \
+           "${ufw_docker_agent}"
+}
+
+test-ufw-docker--service-delete-matches-with-a-port-proto-pair2() {
+    mock-abcd1234-webapp
+    @mock ufw-docker--get-env-list === @stdout "xxx 888/tcp" "abcd1234 webapp/80/tcp" "abcd1234 webapp/53/udp" "abcd1234 webapp/53/tcp"
+
+    load-ufw-docker-function ufw-docker--service-delete
+    ufw-docker--service-delete webapp 5353/udp
+}
+test-ufw-docker--service-delete-matches-with-a-port-proto-pair2-assert() {
+    docker service update --update-parallelism=0 \
+           --env-add ufw_docker_agent_image="${ufw_docker_agent_image}" \
+           --env-add "ufw_public_abcd1234=webapp/53/udp/deny,webapp/80/tcp,webapp/53/tcp" \
+           --env-add "DEBUG=false" \
+           --image "${ufw_docker_agent_image}" \
+           "${ufw_docker_agent}"
+}
+
+test-ufw-docker--service-delete-matches-with-a-not-matched-port() {
+    mock-abcd1234-webapp
+
+    load-ufw-docker-function ufw-docker--service-delete
+    ufw-docker--service-delete webapp 3333
+}
+test-ufw-docker--service-delete-matches-with-a-not-matched-port-assert() {
+    @do-nothing
+    @fail
+}
+
+test-ufw-docker--service-delete-matches-with-a-not-matched-protocal() {
+    @mock ufw-docker--get-service-id webapp === @stdout "abcd1234"
+    @mock ufw-docker--get-service-name webapp === @stdout webapp
+    @mock ufw-docker--list-service-ports webapp === @stdout "22 2222/tcp" "80 8080/tcp" "53 5353/udp"
+
+    load-ufw-docker-function ufw-docker--service-delete
+    ufw-docker--service-delete webapp 8080/udp
+}
+test-ufw-docker--service-delete-matches-with-a-not-matched-protocal-assert() {
+    @do-nothing
+    @fail
+}
+
 test-ufw-docker--list-service-ports() {
     load-ufw-docker-function ufw-docker--list-service-ports
      ufw-docker--list-service-ports foo
 }
 test-ufw-docker--list-service-ports-assert() {
     docker service inspect foo --format '{{range .Endpoint.Spec.Ports}}{{.PublishedPort}} {{.TargetPort}}/{{.Protocol}}{{"\n"}}{{end}}'
+}
+
+function setup-mock-for-testing-docker-entrypoint() {
+    @mock date '+%Y%m%d%H%M%S' === @stdout 200902140731
+
+    declare -gx ufw_public_id111111=alpha/80/tcp
+    declare -gx ufw_public_id222222=beta/deny
+    declare -gx ufw_public_id333333=gamma/8080/tcp/deny,gamma/5353/udp
+
+    @allow-real sed -e '/^declare -x ufw_public_/!d' -e 's/^declare -x ufw_public_//' -e 's/="/ /' -e 's/"$//'
+    @allow-real tr ',' '\n'
+}
+
+test-dockerentrypoint() {
+    setup-mock-for-testing-docker-entrypoint
+    declare -x ufw_public_id333333=gamma/8080/tcp/deny,gamma/5353/udp
+
+    @run "$working_dir"/../docker-entrypoint.sh update-ufw-rules
+}
+test-dockerentrypoint-assert() {
+    declare -a docker_opts=(run --rm -t --name ufw-docker-agent-42-200902140731
+                            --cap-add NET_ADMIN --network host --env DEBUG=false
+                            -v /var/run/docker.sock:/var/run/docker.sock
+                            -v /etc/ufw:/etc/ufw
+                            chaifeng/ufw-docker-agent:090502
+                           )
+    docker "${docker_opts[@]}" add-service-rule id111111 80/tcp
+    docker "${docker_opts[@]}" delete allow id222222
+    docker "${docker_opts[@]}" delete allow id333333 8080/tcp
+    docker "${docker_opts[@]}" add-service-rule id333333 5353/udp
+}
+
+test-dockerentrypoint-deny-first() {
+    setup-mock-for-testing-docker-entrypoint
+    declare -x ufw_public_id333333=gamma/5353/udp,gamma/8080/tcp/deny
+
+    @run "$working_dir"/../docker-entrypoint.sh update-ufw-rules
+}
+test-dockerentrypoint-deny-first-assert() {
+    declare -a docker_opts=(run --rm -t --name ufw-docker-agent-42-200902140731
+                            --cap-add NET_ADMIN --network host --env DEBUG=false
+                            -v /var/run/docker.sock:/var/run/docker.sock
+                            -v /etc/ufw:/etc/ufw
+                            chaifeng/ufw-docker-agent:090502
+                           )
+    docker "${docker_opts[@]}" add-service-rule id111111 80/tcp
+    docker "${docker_opts[@]}" delete allow id222222
+    docker "${docker_opts[@]}" delete allow id333333 8080/tcp
+    docker "${docker_opts[@]}" add-service-rule id333333 5353/udp
 }

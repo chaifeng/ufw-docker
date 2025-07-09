@@ -40,7 +40,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ufw-docker-agent
+          images: chaifeng/ufw-docker-agent
           tags: |
             type=ref,event=tag,suffix=-${{ matrix.variant.name }}
             type=ref,event=branch,suffix=-${{ matrix.variant.name }}

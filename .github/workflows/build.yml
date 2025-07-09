@@ -1,47 +1,59 @@
-name: Build Images
+name: Build and Push Images
 
 on:
   push:
+    tags:
+      - '*'
+    branches:
+      - 'main'
 
 jobs:
   docker:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        arch: [amd64, arm64/v8]
         variant:
           - name: nf_tables
             use_iptables_legacy: "false"
           - name: legacy
             use_iptables_legacy: "true"
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Log into DockerHub
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
-          username: ${{ github.actor }}
+          username: ${{ github.repository_owner }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
+        id: buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ github.actor }}/ufw-docker-agent
+          images: ${{ github.repository }}
           tags: |
             type=ref,event=tag,suffix=-${{ matrix.variant.name }}
+            type=ref,event=branch,suffix=-${{ matrix.variant.name }}
 
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
+          context: .
           push: ${{ github.event_name != 'pull_request' }}
-          platforms: linux/${{ matrix.arch }}
+          platforms: linux/amd64,linux/arm64/v8
           build-args: |
             use_iptables_legacy=${{ matrix.variant.use_iptables_legacy }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

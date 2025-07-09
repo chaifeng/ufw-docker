@@ -2,10 +2,6 @@ name: Build and Push Images
 
 on:
   push:
-    tags:
-      - '*'
-    branches:
-      - 'master'
 
 jobs:
   docker:
@@ -18,6 +14,7 @@ jobs:
             use_iptables_legacy: "false"
           - name: legacy
             use_iptables_legacy: "true"
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -40,7 +37,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: chaifeng/ufw-docker-agent
+          images: ${{ github.actor }}/ufw-docker-agent
           tags: |
             type=ref,event=tag,suffix=-${{ matrix.variant.name }}
             type=ref,event=branch,suffix=-${{ matrix.variant.name }}
@@ -55,5 +52,3 @@ jobs:
             use_iptables_legacy=${{ matrix.variant.use_iptables_legacy }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max

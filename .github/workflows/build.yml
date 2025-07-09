@@ -5,7 +5,7 @@ on:
     tags:
       - '*'
     branches:
-      - 'main'
+      - 'master'
 
 jobs:
   docker:

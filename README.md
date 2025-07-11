@@ -225,7 +225,7 @@ This script also supports Docker Swarm mode.
 Download `ufw-docker` script
 
     sudo wget -O /usr/local/bin/ufw-docker \
-      https://github.com/chaifeng/ufw-docker/raw/master/ufw-docker
+      https://github.com/hkfires/ufw-docker/raw/master/ufw-docker
     sudo chmod +x /usr/local/bin/ufw-docker
 
 Then using the following command to modify the `after.rules` file of `ufw`
@@ -576,7 +576,7 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 下载 `ufw-docker` 脚本
 
     sudo wget -O /usr/local/bin/ufw-docker \
-      https://github.com/chaifeng/ufw-docker/raw/master/ufw-docker
+      https://github.com/hkfires/ufw-docker/raw/master/ufw-docker
     chmod +x /usr/local/bin/ufw-docker
 
 使用下列命令来修改 ufw 的 `after.rules` 文件

@@ -52,3 +52,5 @@ jobs:
             use_iptables_legacy=${{ matrix.variant.use_iptables_legacy }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ github.workflow }}-${{ matrix.variant.name }}
+          cache-to: type=gha,scope=${{ github.workflow }}-${{ matrix.variant.name }},mode=max

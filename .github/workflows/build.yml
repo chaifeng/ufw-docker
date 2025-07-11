@@ -4,7 +4,7 @@ on:
   push:
 
 jobs:
-  docker:
+  build-and-push-agent:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

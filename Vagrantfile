@@ -6,11 +6,13 @@
 ENV['VAGRANT_NO_PARALLEL']="true"
 
 Vagrant.configure('2') do |config|
-  ubuntu_version = File.readlines("Dockerfile").filter { |line|
+  dockerfile_path = File.expand_path("Dockerfile", __dir__)
+  
+  ubuntu_version = File.readlines(dockerfile_path).filter { |line|
     line.start_with?("FROM ")
   }.first.match(/\d\d\.\d\d/)[0]
 
-  docker_version = File.readlines("Dockerfile").filter { |line|
+  docker_version = File.readlines(dockerfile_path).filter { |line|
     line.start_with?("ARG docker_version=")
   }.first.match(/"([\d\.]+)"/)[1]
 

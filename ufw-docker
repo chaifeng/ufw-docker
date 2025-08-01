@@ -15,6 +15,8 @@ ufw_docker_agent_image="${UFW_DOCKER_AGENT_IMAGE:-chaifeng/${ufw_docker_agent}:2
 
 after_rules="/etc/ufw/after.rules"
 after6_rules="/etc/ufw/after6.rules"
+
+man_location="/usr/local/man/man8/ufw-docker.8"
 # UFW-DOCKER GLOBAL VARIABLES END #
 
 if [[ "${ufw_docker_agent_image}" = *-@(legacy|nf_tables) ]]; then
@@ -351,6 +353,17 @@ function ufw-docker--raw-command() {
 }
 
 function ufw-docker--check() {
+    # test $@ for the '--system' flag
+    local system_flag=false
+    for arg in "$@"; do
+        if [[ "$arg" == "--system" ]]; then
+            system_flag=true
+        else
+            new_args+=("$arg")
+        fi
+    done
+    set -- "${new_args[@]}"
+
     err "\\n########## iptables -n -L DOCKER-USER ##########"
     iptables -n -L DOCKER-USER
 
@@ -363,6 +376,11 @@ function ufw-docker--check() {
 
         err "\\n\\n########## diff $after6_rules ##########"
         ufw-docker--check-install_ipv6 "$@" && err "\\nCheck IPv6 firewall rules done."
+    fi
+
+    if $system_flag; then
+        err "\\n\\n########## man page ##########"
+        err "Installing man page to '${man_location}'"
     fi
 }
 
@@ -518,6 +536,18 @@ function ufw-docker--check-install_ipv6() {
 
 function ufw-docker--install() {
     local changed=false
+
+    # test $@ for the '--system' flag
+    local system_flag=false
+    for arg in "$@"; do
+        if [[ "$arg" == "--system" ]]; then
+            system_flag=true
+        else
+            new_args+=("$arg")
+        fi
+    done
+    set -- "${new_args[@]}"
+
     if ! ufw-docker--check-install "$@"; then
         changed=true
         local after_rules_bak
@@ -536,8 +566,15 @@ function ufw-docker--install() {
         cat "$after6_rules_tmp" > "$after6_rules"
     fi
 
+    if $system_flag; then
+        err "\\nInstalling man page to '${man_location}'"
+        mkdir -p $(dirname ${man_location})
+        man-page > ${man_location}
+        mandb > /dev/null
+    fi
+
     if "$changed"; then
-        err "Please restart UFW service manually by using the following command:"
+        err "\\nPlease restart UFW service manually by using the following command:"
         if type systemctl &>/dev/null; then
             err "    sudo systemctl restart ufw"
         else
@@ -548,7 +585,7 @@ function ufw-docker--install() {
 
 function ufw-docker--install--help() {
     cat <<HELP
-ufw-docker $1 --docker-subnets [SUBNET1 SUBNET2 …]
+ufw-docker $1 --docker-subnets [SUBNET1 SUBNET2 …] [--system]
 
 Specify which subnets should be used when configuring firewall rules for Docker containers and any allowed networks that communicate with containers.
 
@@ -568,6 +605,8 @@ Examples:
 
   - ufw-docker $1 --docker-subnets 10.207.0.0/16 192.168.207.0/24 fd00:cf::/64
     Use only the specified subnets, including those outside of Docker’s own configuration, for all networks that should be allowed to communicate with containers.
+
+Additionally the flag '--system' can be used to install the included man-page to the system.
 HELP
 }
 
@@ -580,12 +619,13 @@ function ufw-docker--help() {
 	  ufw-docker service allow <swarm-service-id-or-name <port</tcp|/udp>>>
 	  ufw-docker service delete allow <swarm-service-id-or-name>
 
-	  ufw-docker <install|check> [--docker-subnets [SUBNET0 SUBNET1 ...]]
+	  ufw-docker <install|check> [--docker-subnets [SUBNET0 SUBNET1 ...]] [--system]
 
-	  ufw-docker <status|install|check|help>
+	  ufw-docker <status|install|check|man[page]|help>
 
 	Examples:
 	  ufw-docker help
+	  ufw-docker man
 	  ufw-docker check --help
 	  ufw-docker install --help
 
@@ -593,9 +633,10 @@ function ufw-docker--help() {
 	  ufw-docker check --docker-subnets        # Auto-detect and use all Docker network subnets
 	  ufw-docker check --docker-subnets 192.168.207.0/24 10.207.0.0/16 fd00:cf::/64
 
-	  ufw-docker install                      # Install firewall rules
+	  ufw-docker install --system             # Install firewall rules and man-page
 	  ufw-docker install --docker-subnets     # Auto-detect and use all Docker network subnets
 	  ufw-docker install --docker-subnets 192.168.207.0/24 10.207.0.0/16 fd00:cf::/64
+	  ufw-docker install --docker-subnets 192.168.207.0/24 10.207.0.0/16 fd00:cf::/64 
 
 	  ufw-docker status
 
@@ -608,11 +649,201 @@ function ufw-docker--help() {
 
 	  ufw-docker delete allow httpd
 	  ufw-docker delete allow httpd 80/tcp
-          ufw-docker delete allow httpd 80/tcp default
+	  ufw-docker delete allow httpd 80/tcp default
 
 	  ufw-docker service allow httpd 80/tcp
 
 	  ufw-docker service delete allow httpd
+	EOF
+}
+
+function man-page() {
+	cat <<-EOF
+	.\" ufw-docker.8 - fix the Docker and UFW security flaw without disabling iptables
+	.\" install in /usr/local/man/man8/ufw-docker.8
+	.TH UFW-DOCKER 8 2025-07-31
+
+	.SH NAME
+	ufw-docker \- fix the Docker and UFW security flaw without disabling iptables
+
+	.SH SYNOPSIS
+	.B ufw-docker
+	help|status|man
+	.br
+	.B ufw-docker
+	install|check [--help] [--docker-subnets [\fIsubnet\fR ...]] [--system]
+	.br
+	.B ufw-docker
+	allow|deny|list
+	\fIcontainer\fR [\fIport\fR[/tcp|/udp]] [\fInetwork\fR]
+	.br
+	.B ufw-docker
+	[service] allow|deny
+	\fIcontainer\fR [\fIport\fR[/tcp|/udp]] [\fInetwork\fR]
+	.br
+	.B ufw-docker
+	[service] delete allow|deny
+	\fIcontainer\fR [\fIport\fR[/tcp|/udp]] [\fInetwork\fR]
+
+	.SH DESCRIPTION
+	Docker manages iptables directly, bypassing UFW and exposing published ports regardless of UFW rules. ufw-docker inserts a set of iptables rules into UFW’s after.rules (via DOCKER-USER chain) so that UFW can govern which published ports are reachable from public networks.
+
+	.SH COMMANDS
+	.TP
+	.B install \fR[--help] [--docker-subnets [\fIsubnet\fR ...]] [--system]
+	Inserts the special rules block into '$after_rules'. With --system also installs the manpage into '$man_location'.
+
+	Use --docker-subnets to customize which subnets will be allowed to communicate with Docker containers. If the option is \fBnot provided\fR, only standard private LAN subnets will be used (IPv4: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16; IPv6: fd00::/8). If no subnets are provided all Docker network subnets will be detected and used automatically.
+	This option applies to both IPv4 and IPv6 networks.
+
+	Using --help shows more explanatory text and exits.
+
+	.TP
+	.B check \fR[--help] [--docker-subnets [\fIsubnet\fR ...]] [--system]
+	Same as \fBinstall\fR, but shows the changes instead of appling them.
+
+	.TP
+	.B help
+	Shows a help page. See 'ufw-docker man' for more detailed explanations.
+
+	.TP
+	.B list \fIcontainer\fR [\fIport\fR[\fB/tcp\fR|\fB/udp\fR]] [\fInetwork\fR]
+	Lists all firewall rules related to a specific container. Can be filtered to only show a specific port with a specific protocol for a specific network.
+
+	.TP
+	.B man\fR[\fBpage\fR]
+	Shows the man page of 'ufw-docker'. (Similar to 'man ufw-docker'.)
+
+	.TP
+	.B status
+	Shows the current firewall allowed forward rules.
+
+	.TP
+	.B allow\fR|\fBdeny \fIcontainer\fR [\fIport\fR[\fB/tcp\fR|\fB/udp\fR]] [\fInetwork\fR]
+	Adds a UFW rule allowing/denying traffic to the specified container. Can be further limited to a port, protocol or network.
+
+	(Can be prepended with \fBservice\fR to target services instead of containers.)
+
+	.TP
+	.B delete allow\fR|\fBdeny \fIcontainer\fR [\fIport\fR[\fB/tcp\fR|\fB/udp\fR]] [\fInetwork\fR]
+	Removes \fBALL\fR rules that allow/deny traffic to a container. Can be further limited to only remove rules with a specific port, protocol or network.
+
+	(Can be prepended with \fBservice\fR to target services instead of containers.)
+
+	.SH EXIT STATUS
+	.TP
+	0
+	Successful program execution.
+	.TP
+	1
+	Unsuccessful program execution.
+
+	.SH EXAMPLES
+
+	.TP
+	.B ufw-docker install --system
+	.TP
+	.PP
+	Use default private LAN subnets (IPv4: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, IPv6: fd00::/8). Also install the man page.
+
+	.TP
+	.B ufw-docker install --docker-subnets
+	.TP
+	.PP
+	Auto-detect and use all Docker network subnets (both IPv4 and IPv6).
+
+	.TP
+	.B ufw-docker list httpd
+	.TP
+	.PP
+	List all firewall rules related to container \fIhttpd\fR.
+
+	.TP
+	.B ufw-docker allow httpd 443/tcp foobar-external-network
+	.TP
+	.PP
+	Expose the \fI443\fR port of the container \fIhttpd\fR and the protocol is \fItcp\fR and the network is \fIfoobar-external-network\fR when the container \fIhttpd\fR is attached to multiple networks.
+
+	.TP
+	.B ufw-docker delete allow httpd 443/tcp
+	.TP
+	.PP
+	Remove the rule which port is \fI443\fR and protocol is \fItcp\fR for the container \fIhttpd\fR.
+
+	.TP
+	.B
+	.TP
+	.PP
+	t
+
+
+	.SH FILES
+	.TP
+	.B ${after_rules}
+	Modified by install.
+
+	.TP
+	.B ${after6_rules}
+	Modified by install, if ip6tables is available.
+
+	.TP
+	.B ${man_location}
+	Modified by install, when the --system flag is set.
+
+	.SH NOTES
+	.B INSTALL
+
+	.nf
+	# download the script
+	sudo wget -O /usr/local/bin/ufw-docker \\
+		https://github.com/chaifeng/ufw-docker/raw/master/ufw-docker
+	sudo chmod +x /usr/local/bin/ufw-docker
+
+	# integrate with UFW (adds iptables rules) and installs the man page
+	sudo ufw-docker install --system
+	.fi
+
+	.B UNINSTALL
+
+	Open file \fI${after_rules}\fR (and \fI${after6_rules}\fR), remove all lines between
+	.B # BEGIN UFW AND DOCKER
+	and
+	.B # END UFW AND DOCKER
+	.
+
+	.PP
+	If you want to remove all things related to ufw-docker:
+
+	.TP
+	.B 1.
+	Remove the script \fBufw-docker\fR (and this man page).
+
+	.TP
+	.B 2.
+	Run the following command to find the docker image downloaded by ufw-docker.
+
+	.nf
+	\fBdocker images | grep ufw-docker-agent\fR
+	.fi
+
+	.TP
+	.B 3.
+	Then use the following command to remove the corresponding Docker image.
+
+	.nf
+	\fBdocker rmi\fR \fIimage\fR
+	.fi
+
+	.SH AUTHOR
+	Script by Chai Feng and contributors. Source:
+	https://github.com/chaifeng/ufw-docker
+
+	(Man page by Elia Nitsche.)
+
+	.SH SEE ALSO
+	.BR ufw (8),
+	.BR docker (1),
+	.BR iptables (8)
 	EOF
 }
 
@@ -690,6 +921,9 @@ case "$ufw_action" in
         ;;
     status)
         ufw-docker--"$ufw_action"
+        ;;
+    man|manpage)
+        man-page | man -l -
         ;;
     *)
         ufw-docker--help

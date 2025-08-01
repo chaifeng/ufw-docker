@@ -859,3 +859,43 @@ COMMIT
 EOF
     diff -u --color=auto /etc/ufw/after.rules /tmp/after_rules_tmp
 }
+
+test-man-command() {
+	ufw-docker man
+}
+test-man-command-assert() {
+	man-page
+	man -l -
+}
+
+test-install-command-with-system() {
+	@mock ufw-docker--check-install === @stdout checkInstall
+	@mock ufw-docker--check-install_ipv6 === @stdout checkInstallv6
+	@mock mkdir -p === @stdout createDir
+	@mock mandb
+	load-ufw-docker-function ufw-docker--install
+
+	man_location="/dev/null"
+	ufw-docker--install --system
+}
+test-install-command-with-system-assert() {
+	man_location="/dev/null"
+	checkInstall
+	checkInstallv6
+	dirname $man_location 
+	createDir
+	man-page
+	mandb
+}
+
+test-check-command-with-system() {
+	@mock ufw-docker--check-install === @stdout checkInstall
+	load-ufw-docker-function ufw-docker--check
+
+	man_location="/tmp/test.8"
+	ufw-docker--check --system
+}
+test-check-command-with-system-assert() {
+	iptables  -n  -L  DOCKER-USER
+	checkInstall
+}

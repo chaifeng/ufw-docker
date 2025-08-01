@@ -289,6 +289,10 @@ Update UFW configurations, add the necessary firewall rules
 
     ufw-docker install
 
+Restore UFW configuration, delete all installed files
+
+    ufw-docker uninstall
+
 Show the current firewall allowed forward rules
 
     ufw-docker status

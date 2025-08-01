@@ -872,20 +872,25 @@ test-install-command-with-system() {
 	@mock ufw-docker--check-install === @stdout checkInstall
 	@mock ufw-docker--check-install_ipv6 === @stdout checkInstallv6
 	@mock mkdir -p === @stdout createDir
-	@mock mandb
+	@mock mandb -q
 	load-ufw-docker-function ufw-docker--install
 
 	man_location="/dev/null"
+	bin_location="/dev/null"
 	ufw-docker--install --system
 }
 test-install-command-with-system-assert() {
 	man_location="/dev/null"
+	bin_location="/dev/null"
 	checkInstall
 	checkInstallv6
+	dirname $bin_location 
+	createDir
+	cp --  $0 $bin_location
 	dirname $man_location 
 	createDir
 	man-page
-	mandb
+	mandb -q
 }
 
 test-check-command-with-system() {
@@ -898,4 +903,39 @@ test-check-command-with-system() {
 test-check-command-with-system-assert() {
 	iptables  -n  -L  DOCKER-USER
 	checkInstall
+}
+
+test-uninstall() {
+	after_rules="/dev/null"
+	after6_rules="/dev/null"
+	test_file="after.rules-ufw-docker~2015-03-07-141100~"
+	test6_file="after6.rules-ufw-docker~2015-03-07-141100~"
+	@mock get_restore_file === @stdout $test_file
+	@mock get_restore6_file === @stdout $test6_file
+	@mock command -v ip6tables === true
+	@mock dirname $man_location === @stdout /dev/null
+	@mock dirname $bin_location === @stdout /dev/null
+	load-ufw-docker-function ufw-docker--uninstall
+
+	ufw-docker--uninstall
+}
+test-uninstall-assert() {
+	after_rules="/dev/null"
+	after6_rules="/dev/null"
+	test_file="after.rules-ufw-docker~2015-03-07-141100~"
+	test6_file="after6.rules-ufw-docker~2015-03-07-141100~"
+
+	cp $test_file $after_rules
+	cp $test6_file $after6_rules
+	shopt  -s  nullglob
+	dirname $after_rules 
+	cd
+	rm  -- after.rules-ufw-docker~*-*-*-*~
+	cd  -
+	dirname  $after6_rules
+	cd
+	rm  -- after6.rules-ufw-docker~*-*-*-*~
+	cd  -
+	shopt  -u  nullglob
+	rm  -f  /usr/local/man/man8/ufw-docker.8  /usr/local/bin/ufw-docker
 }

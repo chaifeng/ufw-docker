@@ -16,7 +16,11 @@ ufw_docker_agent_image="${UFW_DOCKER_AGENT_IMAGE:-chaifeng/${ufw_docker_agent}:2
 after_rules="/etc/ufw/after.rules"
 after6_rules="/etc/ufw/after6.rules"
 
+bin_location="/usr/local/bin/ufw-docker"
 man_location="/usr/local/man/man8/ufw-docker.8"
+
+file_name="after.rules-ufw-docker~*-*-*-*~"
+file6_name="after6.rules-ufw-docker~*-*-*-*~"
 # UFW-DOCKER GLOBAL VARIABLES END #
 
 if [[ "${ufw_docker_agent_image}" = *-@(legacy|nf_tables) ]]; then
@@ -379,7 +383,8 @@ function ufw-docker--check() {
     fi
 
     if $system_flag; then
-        err "\\n\\n########## man page ##########"
+        err "\\n\\n########## system install ##########"
+        err "Installing 'ufw-docker' to '${bin_location}'"
         err "Installing man page to '${man_location}'"
     fi
 }
@@ -567,10 +572,14 @@ function ufw-docker--install() {
     fi
 
     if $system_flag; then
+        err "\\nInstalling 'ufw-docker' to '${bin_location}'"
+        mkdir -p $(dirname ${bin_location})
+		cp -- $0 ${bin_location}
+
         err "\\nInstalling man page to '${man_location}'"
         mkdir -p $(dirname ${man_location})
         man-page > ${man_location}
-        mandb > /dev/null
+        mandb -q > /dev/null
     fi
 
     if "$changed"; then
@@ -580,6 +589,82 @@ function ufw-docker--install() {
         else
             err "    sudo service ufw restart"
         fi
+    fi
+}
+
+function get_restore_file() {
+    local restore_file=$(ls -d $(dirname ${after_rules})/* | grep -e "$file_name" | sort | head -n1 || true)
+    echo $restore_file
+    if [ -z "${restore_file}" ]; then
+        return 1
+    fi
+}
+function get_restore6_file() {
+    local restore6_file=$(ls -d $(dirname ${after_rules})/* | grep -e "$file6_name" | sort | head -n1 || true)
+    echo $restore6_file
+    if [ -z "${restore6_file}" ]; then
+        return 1
+    fi
+}
+
+function ufw-docker--uninstall() {
+    # restore ufw rules
+    local restore_failed=false
+    local failed=false
+
+    restore_file=$(get_restore_file || true)
+    if [ -z "${restore_file}" ]; then
+        restore_failed=true
+    else
+        err "restoring '${after_rules}'"
+        cp ${restore_file} ${after_rules}
+    fi
+
+    if command -v ip6tables >/dev/null 2>&1; then
+        restore6_file=$(get_restore6_file || true)
+        if [ -z "${restore6_file}" ]; then
+            restore_failed=true
+        else
+            err "restoring '${after6_rules}'"
+            cp ${restore6_file} ${after6_rules}
+        fi
+    fi
+
+    if "$restore_failed"; then
+        err "restoring of some files failed, cleanup '${after_rules}' and '${after6_rules}' yourself."
+        failed=true
+    else
+        # delete backup files
+        err "deleting backup files"
+
+        shopt -s nullglob   # allow '*' expansion
+        cd $(dirname ${after_rules})
+        local files=( $file_name )
+        #printf '%s\n' "${files[@]}"
+        rm -- ${files[@]}
+        cd - >/dev/null
+
+        cd $(dirname ${after6_rules})
+        local files6=( $file6_name )
+        #printf '%s\n' "${files6[@]}"
+        rm -- ${files6[@]}
+        cd - >/dev/null
+        shopt -u nullglob
+    fi
+
+    # delete files
+    if [ -n "$(dirname ${man_location})" ] && [ -n "$(dirname ${bin_location})" ]; then
+        err "deleting: $man_location, $bin_location"
+        rm -f ${man_location} ${bin_location}
+    else
+        err "'\$man_location' or '\$bin_location' are not valid, will not remove any files."
+        failed=true
+    fi
+    
+    if ! "$failed"; then
+        err "\e[1mUninstall successful!\e[0m"
+    else
+        exit 1
     fi
 }
 
@@ -621,7 +706,7 @@ function ufw-docker--help() {
 
 	  ufw-docker <install|check> [--docker-subnets [SUBNET0 SUBNET1 ...]] [--system]
 
-	  ufw-docker <status|install|check|man[page]|help>
+	  ufw-docker <status|install|uninstall|check|man[page]|help>
 
 	Examples:
 	  ufw-docker help
@@ -668,7 +753,7 @@ function man-page() {
 
 	.SH SYNOPSIS
 	.B ufw-docker
-	help|status|man
+	help|status|man|uninstall
 	.br
 	.B ufw-docker
 	install|check [--help] [--docker-subnets [\fIsubnet\fR ...]] [--system]
@@ -697,6 +782,10 @@ function man-page() {
 	This option applies to both IPv4 and IPv6 networks.
 
 	Using --help shows more explanatory text and exits.
+
+	.TP
+	.B uninstall
+	Removes the script, man-page and the applied ufw rules.
 
 	.TP
 	.B check \fR[--help] [--docker-subnets [\fIsubnet\fR ...]] [--system]
@@ -780,7 +869,7 @@ function man-page() {
 	.SH FILES
 	.TP
 	.B ${after_rules}
-	Modified by install.
+	Modified by install/uninstall.
 
 	.TP
 	.B ${after6_rules}
@@ -816,7 +905,7 @@ function man-page() {
 
 	.TP
 	.B 1.
-	Remove the script \fBufw-docker\fR (and this man page).
+	Remove the script \fBufw-docker\fR, this man page and the ufw rules with 'ufw-docker uninstall'
 
 	.TP
 	.B 2.
@@ -918,6 +1007,9 @@ case "$ufw_action" in
             exit
         fi
         "ufw-docker--$ufw_action" "$@"
+        ;;
+    uninstall)
+        ufw-docker--uninstall "$@"
         ;;
     status)
         ufw-docker--"$ufw_action"

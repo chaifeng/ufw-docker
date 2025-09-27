@@ -251,11 +251,55 @@ test-allow-command-for-instance-with-port-and-udp-protocol-assert() {
 }
 
 
+test-allow-command-for-instance-with-source-ip() {
+    @mock ufw-docker--instance-name httpd === @stdout httpd-container-name
+    ufw-docker allow httpd 192.168.1.10 80/tcp
+}
+test-allow-command-for-instance-with-source-ip-assert() {
+    ufw-docker--allow httpd-container-name 192.168.1.10 80 tcp ""
+}
+
+
+test-allow-command-for-instance-with-source-subnet() {
+    @mock ufw-docker--instance-name httpd === @stdout httpd-container-name
+    ufw-docker allow httpd 192.168.1.0/24 80/tcp
+}
+test-allow-command-for-instance-with-source-subnet-assert() {
+    ufw-docker--allow httpd-container-name 192.168.1.0/24 80 tcp ""
+}
+
+
+test-allow-command-for-instance-with-source-any() {
+    @mock ufw-docker--instance-name httpd === @stdout httpd-container-name
+    ufw-docker allow httpd any 80/tcp
+}
+test-allow-command-for-instance-with-source-any-assert() {
+    ufw-docker--allow httpd-container-name any 80 tcp ""
+}
+
+
+test-allow-command-for-instance-with-source-and-network() {
+    @mock ufw-docker--instance-name httpd === @stdout httpd-container-name
+    ufw-docker allow httpd 192.168.1.10 80/tcp default
+}
+test-allow-command-for-instance-with-source-and-network-assert() {
+    ufw-docker--allow httpd-container-name 192.168.1.10 80 tcp default
+}
+
+
 test-ASSERT-FAIL-allow-httpd-INVALID-port() {
     @mock ufw-docker--instance-name httpd === @stdout httpd-container-name
     @mock die 'invalid port syntax: "invalid".' === exit 1
 
     ufw-docker allow httpd any invalid
+}
+
+
+test-ASSERT-FAIL-allow-httpd-INVALID-source() {
+    @mock ufw-docker--instance-name httpd === @stdout httpd-container-name
+    @mock die 'invalid source syntax: "invalid-source".' === exit 1
+
+    ufw-docker allow httpd invalid-source
 }
 
 
@@ -265,6 +309,24 @@ test-delete-allow-command-for-instance() {
 }
 test-delete-allow-command-for-instance-assert() {
     ufw-docker--delete httpd-container-name "" "" tcp ""
+}
+
+
+test-delete-allow-command-for-instance-with-source() {
+    @mock ufw-docker--instance-name httpd === @stdout httpd-container-name
+    ufw-docker delete allow httpd 192.168.1.10 80/tcp
+}
+test-delete-allow-command-for-instance-with-source-assert() {
+    ufw-docker--delete httpd-container-name 192.168.1.10 80 tcp ""
+}
+
+
+test-delete-allow-command-for-instance-with-source-and-network() {
+    @mock ufw-docker--instance-name httpd === @stdout httpd-container-name
+    ufw-docker delete allow httpd 192.168.1.10 80/tcp default
+}
+test-delete-allow-command-for-instance-with-source-and-network-assert() {
+    ufw-docker--delete httpd-container-name 192.168.1.10 80 tcp default
 }
 
 
@@ -568,6 +630,54 @@ test-add-rule-modifies-existing-rule-without-port-assert() {
 }
 
 
+test-add-rule-for-source-ip() {
+    @mockfalse ufw-docker--list webapp 192.168.1.10 5000 tcp ""
+    @ignore echo
+
+    load-ufw-docker-function ufw-docker--add-rule
+    ufw-docker--add-rule webapp 172.18.0.4 192.168.1.10 5000 tcp
+}
+test-add-rule-for-source-ip-assert() {
+    ufw route allow proto tcp from 192.168.1.10 to 172.18.0.4 port 5000 comment "allow webapp 192.168.1.10 5000/tcp"
+}
+
+
+test-add-rule-for-source-subnet() {
+    @mockfalse ufw-docker--list webapp 192.168.1.0/24 5000 tcp ""
+    @ignore echo
+
+    load-ufw-docker-function ufw-docker--add-rule
+    ufw-docker--add-rule webapp 172.18.0.4 192.168.1.0/24 5000 tcp
+}
+test-add-rule-for-source-subnet-assert() {
+    ufw route allow proto tcp from 192.168.1.0/24 to 172.18.0.4 port 5000 comment "allow webapp 192.168.1.0/24 5000/tcp"
+}
+
+
+test-ipv6-add-rule-for-source-ip() {
+    @mockfalse ufw-docker--list webapp fd00:cf::42 5000 tcp ""
+    @ignore echo
+
+    load-ufw-docker-function ufw-docker--add-rule
+    ufw-docker--add-rule webapp 172.18.0.4 fd00:cf::42 5000 tcp
+}
+test-ipv6-add-rule-for-source-ip-assert() {
+    ufw route allow proto tcp from fd00:cf::42 to 172.18.0.4 port 5000 comment "allow webapp fd00:cf::42 5000/tcp"
+}
+
+
+test-ipv6-add-rule-for-source-subnet() {
+    @mockfalse ufw-docker--list webapp fd00:cf::/8 5000 tcp ""
+    @ignore echo
+
+    load-ufw-docker-function ufw-docker--add-rule
+    ufw-docker--add-rule webapp 172.18.0.4 fd00:cf::/8 5000 tcp
+}
+test-ipv6-add-rule-for-source-subnet-assert() {
+    ufw route allow proto tcp from fd00:cf::/8 to 172.18.0.4 port 5000 comment "allow webapp fd00:cf::/8 5000/tcp"
+}
+
+
 test-instance-name-resolves-from-name() {
     @mock docker inspect --format="{{.Name}}" foo
     @mock sed -e 's,^/,,'
@@ -598,7 +708,6 @@ test-instance-name-resolves-from-id-assert() {
     @dryrun echo -n fooid
 }
 
-# TODO(DakEnviy): Add mock for custom sources
 function mock-ufw-status-numbered-foo() {
     @mock ufw status numbered === @echo "Status: active
 
@@ -613,12 +722,19 @@ function mock-ufw-status-numbered-foo() {
 [ 7] 172.18.0.2 29090/tcp       ALLOW FWD   Anywhere                   # allow id111111 any 29090/tcp
 [ 8] 172.18.0.2 48080/tcp       ALLOW FWD   Anywhere                   # allow id222222 any 48080/tcp
 [ 9] 172.18.0.2 40080/tcp       ALLOW FWD   Anywhere                   # allow id333333 any 40080/tcp
-[10] OpenSSH (v6)               ALLOW IN    Anywhere (v6)
-[11] Anywhere (v6)              ALLOW IN    fd00:a:b:0:cafe::/80
-[12] fd00:a:b:deaf::3 80/tcp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 any 80/tcp bridge
-[13] fd05:8f23:c937:2::3 80/tcp ALLOW FWD   Anywhere (v6)              # allow bar/v6 any 80/tcp bar-external
-[14] fd00:a:b:deaf::3 53/udp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 any 53/udp foo-internal
-[15] fd00:a:b:deaf::3 53/tcp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 any 53/tcp
+[10] 172.18.0.4 8080/tcp        ALLOW FWD   192.168.1.10               # allow baz 192.168.1.10 8080/tcp
+[11] 172.18.0.4 8082/udp        ALLOW FWD   192.168.1.10               # allow baz 192.168.1.10 8082/udp
+[12] 172.18.0.4 8080/tcp        ALLOW FWD   192.168.2.10/24            # allow baz 192.168.2.10/24 8080/tcp
+[13] 172.18.0.4 8081/tcp        ALLOW FWD   192.168.2.10/24            # allow baz 192.168.2.10/24 8081/tcp bridge
+[14] OpenSSH (v6)               ALLOW IN    Anywhere (v6)
+[15] Anywhere (v6)              ALLOW IN    fd00:a:b:0:cafe::/80
+[16] fd00:a:b:deaf::3 80/tcp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 any 80/tcp bridge
+[17] fd05:8f23:c937:2::3 80/tcp ALLOW FWD   Anywhere (v6)              # allow bar/v6 any 80/tcp bar-external
+[18] fd00:a:b:deaf::3 53/udp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 any 53/udp foo-internal
+[19] fd00:a:b:deaf::3 53/tcp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 any 53/tcp
+[20] fd00:a:b:deaf::4 8080/tcp  ALLOW FWD   fd00:a:b:0:cafe::1         # allow baz/v6 fd00:a:b:0:cafe::1 8080/tcp
+[21] fd00:a:b:deaf::4 8080/tcp  ALLOW FWD   fd00:a:b:0:cafe::/80       # allow baz/v6 fd00:a:b:0:cafe::/80 8080/tcp
+[22] fd00:a:b:deaf::4 8081/tcp  ALLOW FWD   fd00:a:b:0:cafe::/80       # allow baz/v6 fd00:a:b:0:cafe::/80 8081/tcp bridge
 "
 
 }
@@ -650,10 +766,17 @@ test-list-internal-all-rules-assert() {
     @stdout "[ 7] 172.18.0.2 29090/tcp       ALLOW FWD   Anywhere                   # allow id111111 any 29090/tcp"
     @stdout "[ 8] 172.18.0.2 48080/tcp       ALLOW FWD   Anywhere                   # allow id222222 any 48080/tcp"
     @stdout "[ 9] 172.18.0.2 40080/tcp       ALLOW FWD   Anywhere                   # allow id333333 any 40080/tcp"
-    @stdout "[12] fd00:a:b:deaf::3 80/tcp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 any 80/tcp bridge"
-    @stdout "[13] fd05:8f23:c937:2::3 80/tcp ALLOW FWD   Anywhere (v6)              # allow bar/v6 any 80/tcp bar-external"
-    @stdout "[14] fd00:a:b:deaf::3 53/udp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 any 53/udp foo-internal"
-    @stdout "[15] fd00:a:b:deaf::3 53/tcp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 any 53/tcp"
+    @stdout "[10] 172.18.0.4 8080/tcp        ALLOW FWD   192.168.1.10               # allow baz 192.168.1.10 8080/tcp"
+    @stdout "[11] 172.18.0.4 8082/udp        ALLOW FWD   192.168.1.10               # allow baz 192.168.1.10 8082/udp"
+    @stdout "[12] 172.18.0.4 8080/tcp        ALLOW FWD   192.168.2.10/24            # allow baz 192.168.2.10/24 8080/tcp"
+    @stdout "[13] 172.18.0.4 8081/tcp        ALLOW FWD   192.168.2.10/24            # allow baz 192.168.2.10/24 8081/tcp bridge"
+    @stdout "[16] fd00:a:b:deaf::3 80/tcp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 any 80/tcp bridge"
+    @stdout "[17] fd05:8f23:c937:2::3 80/tcp ALLOW FWD   Anywhere (v6)              # allow bar/v6 any 80/tcp bar-external"
+    @stdout "[18] fd00:a:b:deaf::3 53/udp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 any 53/udp foo-internal"
+    @stdout "[19] fd00:a:b:deaf::3 53/tcp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 any 53/tcp"
+    @stdout "[20] fd00:a:b:deaf::4 8080/tcp  ALLOW FWD   fd00:a:b:0:cafe::1         # allow baz/v6 fd00:a:b:0:cafe::1 8080/tcp"
+    @stdout "[21] fd00:a:b:deaf::4 8080/tcp  ALLOW FWD   fd00:a:b:0:cafe::/80       # allow baz/v6 fd00:a:b:0:cafe::/80 8080/tcp"
+    @stdout "[22] fd00:a:b:deaf::4 8081/tcp  ALLOW FWD   fd00:a:b:0:cafe::/80       # allow baz/v6 fd00:a:b:0:cafe::/80 8081/tcp bridge"
 }
 
 test-list-internal-rules-by-name() {
@@ -667,9 +790,9 @@ test-list-internal-rules-by-name-assert() {
     @stdout "[ 3] 172.17.0.3 80/tcp          ALLOW FWD   Anywhere                   # allow foo any 80/tcp bridge"
     @stdout "[ 5] 172.17.0.3 53/udp          ALLOW FWD   Anywhere                   # allow foo any 53/udp foo-internal"
     @stdout "[ 6] 172.17.0.3 53/tcp          ALLOW FWD   Anywhere                   # allow foo any 53/tcp"
-    @stdout "[12] fd00:a:b:deaf::3 80/tcp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 any 80/tcp bridge"
-    @stdout "[14] fd00:a:b:deaf::3 53/udp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 any 53/udp foo-internal"
-    @stdout "[15] fd00:a:b:deaf::3 53/tcp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 any 53/tcp"
+    @stdout "[16] fd00:a:b:deaf::3 80/tcp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 any 80/tcp bridge"
+    @stdout "[18] fd00:a:b:deaf::3 53/udp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 any 53/udp foo-internal"
+    @stdout "[19] fd00:a:b:deaf::3 53/tcp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 any 53/tcp"
 }
 
 test-list-internal-rules-by-name-and-udp-protocol() {
@@ -681,7 +804,7 @@ test-list-internal-rules-by-name-and-udp-protocol() {
 }
 test-list-internal-rules-by-name-and-udp-protocol-assert() {
     @stdout "[ 5] 172.17.0.3 53/udp          ALLOW FWD   Anywhere                   # allow foo any 53/udp foo-internal"
-    @stdout "[14] fd00:a:b:deaf::3 53/udp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 any 53/udp foo-internal"
+    @stdout "[18] fd00:a:b:deaf::3 53/udp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 any 53/udp foo-internal"
 }
 
 
@@ -694,7 +817,7 @@ test-list-internal-rules-by-name-port-and-bridge-network() {
 }
 test-list-internal-rules-by-name-port-and-bridge-network-assert() {
     @stdout "[ 3] 172.17.0.3 80/tcp          ALLOW FWD   Anywhere                   # allow foo any 80/tcp bridge"
-    @stdout "[12] fd00:a:b:deaf::3 80/tcp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 any 80/tcp bridge"
+    @stdout "[16] fd00:a:b:deaf::3 80/tcp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 any 80/tcp bridge"
 }
 
 
@@ -707,7 +830,7 @@ test-list-internal-rules-by-name-port-and-udp-protocol() {
 }
 test-list-internal-rules-by-name-port-and-udp-protocol-assert() {
     @stdout "[ 5] 172.17.0.3 53/udp          ALLOW FWD   Anywhere                   # allow foo any 53/udp foo-internal"
-    @stdout "[14] fd00:a:b:deaf::3 53/udp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 any 53/udp foo-internal"
+    @stdout "[18] fd00:a:b:deaf::3 53/udp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 any 53/udp foo-internal"
 }
 
 
@@ -723,6 +846,68 @@ test-list-internal-fails-with-incorrect-network-assert() {
 }
 
 
+test-list-internal-rules-by-name-and-source-ip() {
+    mock-ufw-status-numbered-foo
+    @allow-real grep '# allow baz\(/v6\)\? 192.168.1.10 [[:digit:]]\+/\(tcp\|udp\)\( [-_.[:alnum:]]\+\)\?$'
+
+    load-ufw-docker-function ufw-docker--list
+    ufw-docker--list baz 192.168.1.10
+}
+test-list-internal-rules-by-name-and-source-ip-assert() {
+    @stdout "[10] 172.18.0.4 8080/tcp        ALLOW FWD   192.168.1.10               # allow baz 192.168.1.10 8080/tcp"
+    @stdout "[11] 172.18.0.4 8082/udp        ALLOW FWD   192.168.1.10               # allow baz 192.168.1.10 8082/udp"
+}
+
+
+test-list-internal-rules-by-name-and-source-subnet() {
+    mock-ufw-status-numbered-foo
+    @allow-real grep '# allow baz\(/v6\)\? 192.168.2.10/24 [[:digit:]]\+/\(tcp\|udp\)\( [-_.[:alnum:]]\+\)\?$'
+
+    load-ufw-docker-function ufw-docker--list
+    ufw-docker--list baz 192.168.2.10/24
+}
+test-list-internal-rules-by-name-and-source-subnet-assert() {
+    @stdout "[12] 172.18.0.4 8080/tcp        ALLOW FWD   192.168.2.10/24            # allow baz 192.168.2.10/24 8080/tcp"
+    @stdout "[13] 172.18.0.4 8081/tcp        ALLOW FWD   192.168.2.10/24            # allow baz 192.168.2.10/24 8081/tcp bridge"
+}
+
+
+test-list-internal-rules-by-name-source-and-port() {
+    mock-ufw-status-numbered-foo
+    @allow-real grep '# allow baz\(/v6\)\? 192.168.2.10/24 8081/tcp\( [-_.[:alnum:]]\+\)\?$'
+
+    load-ufw-docker-function ufw-docker--list
+    ufw-docker--list baz 192.168.2.10/24 8081
+}
+test-list-internal-rules-by-name-source-and-port-assert() {
+    @stdout "[13] 172.18.0.4 8081/tcp        ALLOW FWD   192.168.2.10/24            # allow baz 192.168.2.10/24 8081/tcp bridge"
+}
+
+
+test-list-internal-rules-by-name-source-port-and-udp-protocol() {
+    mock-ufw-status-numbered-foo
+    @allow-real grep '# allow baz\(/v6\)\? 192.168.1.10 8082/udp\( [-_.[:alnum:]]\+\)\?$'
+
+    load-ufw-docker-function ufw-docker--list
+    ufw-docker--list baz 192.168.1.10 8082 udp
+}
+test-list-internal-rules-by-name-source-port-and-udp-protocol-assert() {
+    @stdout "[11] 172.18.0.4 8082/udp        ALLOW FWD   192.168.1.10               # allow baz 192.168.1.10 8082/udp"
+}
+
+
+test-list-internal-rules-by-name-source-port-protocol-and-network() {
+    mock-ufw-status-numbered-foo
+    @allow-real grep '# allow baz\(/v6\)\? 192.168.2.10/24 8081/tcp bridge$'
+
+    load-ufw-docker-function ufw-docker--list
+    ufw-docker--list baz 192.168.2.10/24 8081 tcp bridge
+}
+test-list-internal-rules-by-name-source-port-protocol-and-network-assert() {
+    @stdout "[13] 172.18.0.4 8081/tcp        ALLOW FWD   192.168.2.10/24            # allow baz 192.168.2.10/24 8081/tcp bridge"
+}
+
+
 test-list-internal-rules-by-name-and-port() {
     mock-ufw-status-numbered-foo
     @allow-real grep '# allow foo\(/v6\)\? \([.:/[:xdigit:]]\+\|any\) 80/tcp\( [-_.[:alnum:]]\+\)\?$'
@@ -732,7 +917,7 @@ test-list-internal-rules-by-name-and-port() {
 }
 test-list-internal-rules-by-name-and-port-assert() {
     @stdout "[ 3] 172.17.0.3 80/tcp          ALLOW FWD   Anywhere                   # allow foo any 80/tcp bridge"
-    @stdout "[12] fd00:a:b:deaf::3 80/tcp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 any 80/tcp bridge"
+    @stdout "[16] fd00:a:b:deaf::3 80/tcp    ALLOW FWD   Anywhere (v6)              # allow foo/v6 any 80/tcp bridge"
 }
 
 

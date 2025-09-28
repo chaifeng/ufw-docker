@@ -297,17 +297,33 @@ List all firewall rules related to container `httpd`
 
     ufw-docker list httpd
 
-Expose the port `80` of the container `httpd`
+Expose the port `80` of the container `httpd` to any source
 
-    ufw-docker allow httpd 80
+    ufw-docker allow httpd any 80
+
+Expose the port `80` of the container `httpd` only to specific IP address
+
+    ufw-docker allow httpd 192.168.1.10 80
+
+Expose the port `80` of the container `httpd` only to specific subnet
+
+    ufw-docker allow httpd 192.168.1.0/24 80
 
 Expose the `443` port of the container `httpd` and the protocol is `tcp`
 
-    ufw-docker allow httpd 443/tcp
+    ufw-docker allow httpd any 443/tcp
+
+Expose the `443` port of the container `httpd` only to specific IP, protocol is `tcp`
+
+    ufw-docker allow httpd 192.168.1.10 443/tcp
 
 Expose the `443` port of the container `httpd` and the protocol is `tcp` and the network is `foobar-external-network` when the container `httpd` is attached to multiple networks
 
-    ufw-docker allow httpd 443/tcp foobar-external-network
+    ufw-docker allow httpd any 443/tcp foobar-external-network
+
+Expose the `443` port of the container `httpd` only to specific subnet, protocol is `tcp`, network is `foobar-external-network`
+
+    ufw-docker allow httpd 192.168.1.0/24 443/tcp foobar-external-network
 
 Expose all published ports of the container `httpd`
 
@@ -317,9 +333,13 @@ Remove all rules related to the container `httpd`
 
     ufw-docker delete allow httpd
 
-Remove the rule which port is `443` and protocol is `tcp` for the container `httpd`
+Remove all rules related to the container `httpd` for specific source
 
-    ufw-docker delete allow httpd 443/tcp
+    ufw-docker delete allow httpd 192.168.1.10
+
+Remove the rule for specific source, port `443` and protocol is `tcp` for the container `httpd`
+
+    ufw-docker delete allow httpd 192.168.1.10 443/tcp
 
 Expose the port `80` of the service `web`
 
@@ -645,17 +665,33 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 
     ufw-docker list httpd
 
-暴露容器 `httpd` 的 `80` 端口
+暴露容器 `httpd` 的 `80` 端口给任何来源
 
-    ufw-docker allow httpd 80
+    ufw-docker allow httpd any 80
+
+暴露容器 `httpd` 的 `80` 端口仅给特定 IP 地址
+
+    ufw-docker allow httpd 192.168.1.10 80
+
+暴露容器 `httpd` 的 `80` 端口仅给特定子网
+
+    ufw-docker allow httpd 192.168.1.0/24 80
 
 暴露容器 `httpd` 的 `443` 端口，且协议为 `tcp`
 
-    ufw-docker allow httpd 443/tcp
+    ufw-docker allow httpd any 443/tcp
+
+暴露容器 `httpd` 的 `443` 端口仅给特定 IP，协议为 `tcp`
+
+    ufw-docker allow httpd 192.168.1.10 443/tcp
 
 如果容器 `httpd` 绑定到多个网络上，暴露其 `443` 端口，协议为 `tcp`，网络为 `foobar-external-network`
 
-    ufw-docker allow httpd 443/tcp foobar-external-network
+    ufw-docker allow httpd any 443/tcp foobar-external-network
+
+暴露容器 `httpd` 的 `443` 端口仅给特定子网，协议为 `tcp`，网络为 `foobar-external-network`
+
+    ufw-docker allow httpd 192.168.1.0/24 443/tcp foobar-external-network
 
 把容器 `httpd` 的所有映射端口都暴露出来
 
@@ -665,9 +701,13 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 
     ufw-docker delete allow httpd
 
-删除容器 `httpd` 的 `tcp` 端口 `443` 的规则
+删除容器 `httpd` 针对特定来源的所有规则
 
-    ufw-docker delete allow httpd 443/tcp
+    ufw-docker delete allow httpd 192.168.1.10
+
+删除容器 `httpd` 针对特定来源的 `tcp` 端口 `443` 规则
+
+    ufw-docker delete allow httpd 192.168.1.10 443/tcp
 
 暴露服务 `web` 的 `80` 端口
 

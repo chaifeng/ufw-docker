@@ -571,15 +571,15 @@ function ufw-docker--install() {
         cat "$after6_rules_tmp" > "$after6_rules"
     fi
 
-    if $system_flag; then
+    if "$system_flag"; then
         err "\\nInstalling 'ufw-docker' to '${bin_location}'"
-        mkdir -p $(dirname ${bin_location})
-		cp -- $0 ${bin_location}
+        mkdir -p "$(dirname "${bin_location}")"
+		    cp -- "$0" "${bin_location}"
 
         err "\\nInstalling man page to '${man_location}'"
-        mkdir -p $(dirname ${man_location})
-        man-page > ${man_location}
-        mandb -q > /dev/null
+        mkdir -p "$(dirname "${man_location}")"
+        man-page | tee "${man_location}"
+        mandb -q
     fi
 
     if "$changed"; then

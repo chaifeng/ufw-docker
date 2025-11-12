@@ -861,48 +861,49 @@ EOF
 }
 
 test-man-command() {
+  @mock man-page === @stdout "MAN PAGE FOR UFW-DOCKER"
+  @capture man -l -
+
 	ufw-docker man
 }
 test-man-command-assert() {
-	man-page
-	man -l -
+	@assert-capture man -l - <<< "MAN PAGE FOR UFW-DOCKER"
 }
 
 test-install-command-with-system() {
-	@mock ufw-docker--check-install === @stdout checkInstall
-	@mock ufw-docker--check-install_ipv6 === @stdout checkInstallv6
-	@mock mkdir -p === @stdout createDir
-	@mock mandb -q
+	@mock ufw-docker--check-install === @true
+	@mock ufw-docker--check-install_ipv6 === @true
+  @allow-real dirname /usr/local/bin/ufw-docker
+  @allow-real dirname /usr/local/man/man8/ufw-docker.8
+  @mock man-page === @stdout "MAN PAGE FOR UFW-DOCKER"
+  @capture tee /usr/local/man/man8/ufw-docker.8
+
 	load-ufw-docker-function ufw-docker--install
 
-	man_location="/dev/null"
-	bin_location="/dev/null"
 	ufw-docker--install --system
 }
 test-install-command-with-system-assert() {
-	man_location="/dev/null"
-	bin_location="/dev/null"
-	checkInstall
-	checkInstallv6
-	dirname $bin_location 
-	createDir
-	cp --  $0 $bin_location
-	dirname $man_location 
-	createDir
-	man-page
+  mkdir -p /usr/local/bin
+  cp -- test/ufw-docker.test.sh /usr/local/bin/ufw-docker
+
+  mkdir -p /usr/local/man/man8
+  @assert-capture tee /usr/local/man/man8/ufw-docker.8 <<< "MAN PAGE FOR UFW-DOCKER"
+
 	mandb -q
 }
 
 test-check-command-with-system() {
-	@mock ufw-docker--check-install === @stdout checkInstall
+	@mockfalse command -v ip6tables
+  @mock err "Installing man page to '/usr/local/man/man8/ufw-docker.8'"
+
 	load-ufw-docker-function ufw-docker--check
 
-	man_location="/tmp/test.8"
 	ufw-docker--check --system
 }
 test-check-command-with-system-assert() {
-	iptables  -n  -L  DOCKER-USER
-	checkInstall
+	iptables -n -L DOCKER-USER
+	ufw-docker--check-install
+  err "Installing man page to '/usr/local/man/man8/ufw-docker.8'"
 }
 
 test-uninstall() {

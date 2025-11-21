@@ -82,7 +82,7 @@ function ufw-docker--allow() {
     docker inspect "$INSTANCE_NAME" &>/dev/null ||
         die "Docker instance \"$INSTANCE_NAME\" doesn't exist."
 
-    mapfile -t NETWORK_ADDRESSES < <(docker inspect --format '{{range $name, $net := .NetworkSettings.Networks}}{{if $net.IPAddress}}{{$name}} {{$net.IPAddress}}{{"\n"}}{{end}}{{if $net.GlobalIPv6Address}}{{$name}} {{$net.GlobalIPv6Address}}{{"\n"}}{{end}}{{end}}' "$INSTANCE_NAME" 2>/dev/null | remove_blank_lines)
+    mapfile -t NETWORK_ADDRESSES < <(docker inspect --format '{{range $name, $net := .NetworkSettings.Networks}}{{if $net.IPAddress|len}}{{$name}} {{$net.IPAddress}}{{"\n"}}{{end}}{{if $net.GlobalIPv6Address|len}}{{$name}} {{$net.GlobalIPv6Address}}{{"\n"}}{{end}}{{end}}' "$INSTANCE_NAME" 2>/dev/null | remove_blank_lines)
 
     [[ -z "${NETWORK_ADDRESSES:-}" ]] && die "Could not find a running instance \"$INSTANCE_NAME\"."
 

@@ -281,7 +281,7 @@ function setup-ufw-docker--allow() {
     load-ufw-docker-function ufw-docker--allow
 
     @mocktrue docker inspect instance-name
-    @mock docker inspect --format '{{range $name, $net := .NetworkSettings.Networks}}{{if $net.IPAddress}}{{$name}} {{$net.IPAddress}}{{"\n"}}{{end}}{{if $net.GlobalIPv6Address}}{{$name}} {{$net.GlobalIPv6Address}}{{"\n"}}{{end}}{{end}}' instance-name === @stdout "default 172.18.0.3"
+    @mock docker inspect --format '{{range $name, $net := .NetworkSettings.Networks}}{{if $net.IPAddress|len}}{{$name}} {{$net.IPAddress}}{{"\n"}}{{end}}{{if $net.GlobalIPv6Address|len}}{{$name}} {{$net.GlobalIPv6Address}}{{"\n"}}{{end}}{{end}}' instance-name === @stdout "default 172.18.0.3"
     @mock docker inspect --format='{{range $p, $conf := .NetworkSettings.Ports}}{{with $conf}}{{$p}}{{"\n"}}{{end}}{{end}}' instance-name === @stdout 5000/tcp 8080/tcp 5353/udp
 }
 
@@ -289,7 +289,7 @@ function setup-IPv6-ufw-docker--allow() {
     load-ufw-docker-function ufw-docker--allow
 
     @mocktrue docker inspect instance-name
-    @mock docker inspect --format '{{range $name, $net := .NetworkSettings.Networks}}{{if $net.IPAddress}}{{$name}} {{$net.IPAddress}}{{"\n"}}{{end}}{{if $net.GlobalIPv6Address}}{{$name}} {{$net.GlobalIPv6Address}}{{"\n"}}{{end}}{{end}}' instance-name === @stdout "default 172.18.0.3" "default fd00:cf::42"
+    @mock docker inspect --format '{{range $name, $net := .NetworkSettings.Networks}}{{if $net.IPAddress|len}}{{$name}} {{$net.IPAddress}}{{"\n"}}{{end}}{{if $net.GlobalIPv6Address|len}}{{$name}} {{$net.GlobalIPv6Address}}{{"\n"}}{{end}}{{end}}' instance-name === @stdout "default 172.18.0.3" "default fd00:cf::42"
     @mock docker inspect --format='{{range $p, $conf := .NetworkSettings.Ports}}{{with $conf}}{{$p}}{{"\n"}}{{end}}{{end}}' instance-name === @stdout 5000/tcp 8080/tcp 5353/udp
 }
 
@@ -297,7 +297,7 @@ function setup-ufw-docker--allow--multinetwork() {
     load-ufw-docker-function ufw-docker--allow
 
     @mocktrue docker inspect instance-name
-    @mock docker inspect --format '{{range $name, $net := .NetworkSettings.Networks}}{{if $net.IPAddress}}{{$name}} {{$net.IPAddress}}{{"\n"}}{{end}}{{if $net.GlobalIPv6Address}}{{$name}} {{$net.GlobalIPv6Address}}{{"\n"}}{{end}}{{end}}' instance-name === @stdout "default 172.18.0.3" "awesomenet 172.19.0.7"
+    @mock docker inspect --format '{{range $name, $net := .NetworkSettings.Networks}}{{if $net.IPAddress|len}}{{$name}} {{$net.IPAddress}}{{"\n"}}{{end}}{{if $net.GlobalIPv6Address|len}}{{$name}} {{$net.GlobalIPv6Address}}{{"\n"}}{{end}}{{end}}' instance-name === @stdout "default 172.18.0.3" "awesomenet 172.19.0.7"
     @mock docker inspect --format='{{range $p, $conf := .NetworkSettings.Ports}}{{with $conf}}{{$p}}{{"\n"}}{{end}}{{end}}' instance-name === @stdout 5000/tcp 8080/tcp 5353/udp
 }
 
@@ -305,7 +305,7 @@ function setup-IPv6-ufw-docker--allow--multinetwork() {
     load-ufw-docker-function ufw-docker--allow
 
     @mocktrue docker inspect instance-name
-    @mock docker inspect --format '{{range $name, $net := .NetworkSettings.Networks}}{{if $net.IPAddress}}{{$name}} {{$net.IPAddress}}{{"\n"}}{{end}}{{if $net.GlobalIPv6Address}}{{$name}} {{$net.GlobalIPv6Address}}{{"\n"}}{{end}}{{end}}' instance-name === @stdout "default 172.18.0.3" "default fd00:cf::42" "awesomenet 172.19.0.7" "awesomenet fd00:cf::207"
+    @mock docker inspect --format '{{range $name, $net := .NetworkSettings.Networks}}{{if $net.IPAddress|len}}{{$name}} {{$net.IPAddress}}{{"\n"}}{{end}}{{if $net.GlobalIPv6Address|len}}{{$name}} {{$net.GlobalIPv6Address}}{{"\n"}}{{end}}{{end}}' instance-name === @stdout "default 172.18.0.3" "default fd00:cf::42" "awesomenet 172.19.0.7" "awesomenet fd00:cf::207"
     @mock docker inspect --format='{{range $p, $conf := .NetworkSettings.Ports}}{{with $conf}}{{$p}}{{"\n"}}{{end}}{{end}}' instance-name === @stdout 5000/tcp 8080/tcp 5353/udp
 }
 

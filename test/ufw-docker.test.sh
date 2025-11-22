@@ -24,6 +24,8 @@ source "$working_dir"/bach/bach.sh
 
     builtin source <(@sed -n -e '/^# UFW-DOCKER GLOBAL VARIABLES START #$/,/^# UFW-DOCKER GLOBAL VARIABLES END #$/{' -e '/^PATH=/d' -e 'p' -e '}' "$working_dir/../ufw-docker")
     UFW_DOCKER_AGENT_IMAGE=chaifeng/ufw-docker-agent:090502-legacy
+
+    @mock man-page === @stdout "MAN PAGE FOR UFW-DOCKER"
 }
 
 function ufw-docker() {
@@ -861,7 +863,6 @@ EOF
 }
 
 test-man-command() {
-  @mock man-page === @stdout "MAN PAGE FOR UFW-DOCKER"
   @capture man -l -
 
 	ufw-docker man
@@ -875,7 +876,6 @@ test-install-command-with-system() {
 	@mock ufw-docker--check-install_ipv6 === @true
   @allow-real dirname /usr/local/bin/ufw-docker
   @allow-real dirname /usr/local/man/man8/ufw-docker.8
-  @mock man-page === @stdout "MAN PAGE FOR UFW-DOCKER"
   @capture tee /usr/local/man/man8/ufw-docker.8
 
 	load-ufw-docker-function ufw-docker--install
@@ -906,37 +906,99 @@ test-check-command-with-system-assert() {
   err "Installing man page to '/usr/local/man/man8/ufw-docker.8'"
 }
 
-test-uninstall() {
-	after_rules="/dev/null"
-	after6_rules="/dev/null"
-	test_file="after.rules-ufw-docker~2015-03-07-141100~"
-	test6_file="after6.rules-ufw-docker~2015-03-07-141100~"
-	@mock get_restore_file === @stdout $test_file
-	@mock get_restore6_file === @stdout $test6_file
-	@mock command -v ip6tables === true
-	@mock dirname $man_location === @stdout /dev/null
-	@mock dirname $bin_location === @stdout /dev/null
-	load-ufw-docker-function ufw-docker--uninstall
+setup-ufw-docker--uninstall() {
+    @mock date '+%Y-%m-%d-%H%M' === @stdout 2009-02-14-0731
 
-	ufw-docker--uninstall
+    @mocktrue grep -F 'UFW DOCKER' /etc/ufw/after.rules
+    @mocktrue grep -F 'UFW DOCKER' /etc/ufw/after6.rules
+
+    @mocktrue docker service inspect ufw-docker-agent
+
+    @mocktrue [ -f /usr/local/bin/ufw-docker ]
+    @mocktrue [ -f /usr/local/man/man8/ufw-docker.8 ]
+
+    @mocktrue type systemctl
 }
-test-uninstall-assert() {
-	after_rules="/dev/null"
-	after6_rules="/dev/null"
-	test_file="after.rules-ufw-docker~2015-03-07-141100~"
-	test6_file="after6.rules-ufw-docker~2015-03-07-141100~"
+test-ufw-docker--uninstall() {
+    setup-ufw-docker--uninstall
 
-	cp $test_file $after_rules
-	cp $test6_file $after6_rules
-	shopt  -s  nullglob
-	dirname $after_rules 
-	cd
-	rm  -- after.rules-ufw-docker~*-*-*-*~
-	cd  -
-	dirname  $after6_rules
-	cd
-	rm  -- after6.rules-ufw-docker~*-*-*-*~
-	cd  -
-	shopt  -u  nullglob
-	rm  -f  /usr/local/man/man8/ufw-docker.8  /usr/local/bin/ufw-docker
+    load-ufw-docker-function ufw-docker--uninstall
+
+    ufw-docker--uninstall
+}
+test-ufw-docker--uninstall-assert() {
+    cp -v /etc/ufw/after.rules /etc/ufw/after.rules~2009-02-14-0731
+    sed -i -e '/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d' /etc/ufw/after.rules
+    diff /etc/ufw/after.rules~2009-02-14-0731 /etc/ufw/after.rules
+
+    cp -v /etc/ufw/after6.rules /etc/ufw/after6.rules~2009-02-14-0731
+    sed -i -e '/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d' /etc/ufw/after6.rules
+    diff /etc/ufw/after6.rules~2009-02-14-0731 /etc/ufw/after6.rules
+
+    docker service rm ufw-docker-agent
+
+    rm -v /usr/local/bin/ufw-docker
+    rm -v /usr/local/man/man8/ufw-docker.8
+}
+
+test-ufw-docker--uninstall-missing-rules() {
+    setup-ufw-docker--uninstall
+    @mockfalse grep -F 'UFW DOCKER' /etc/ufw/after.rules
+    @mockfalse grep -F 'UFW DOCKER' /etc/ufw/after6.rules
+
+    load-ufw-docker-function ufw-docker--uninstall
+
+    ufw-docker--uninstall
+}
+test-ufw-docker--uninstall-missing-rules-assert() {
+    # Expect no cp or sed calls for after.rules/after6.rules
+    docker service rm ufw-docker-agent
+
+    rm -v /usr/local/bin/ufw-docker
+    rm -v /usr/local/man/man8/ufw-docker.8
+}
+
+test-ufw-docker--uninstall-no-service() {
+    setup-ufw-docker--uninstall
+    @mockfalse docker service inspect ufw-docker-agent # Service not found
+
+    load-ufw-docker-function ufw-docker--uninstall
+
+    ufw-docker--uninstall
+}
+test-ufw-docker--uninstall-no-service-assert() {
+    cp -v /etc/ufw/after.rules /etc/ufw/after.rules~2009-02-14-0731
+    sed -i -e '/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d' /etc/ufw/after.rules
+    diff /etc/ufw/after.rules~2009-02-14-0731 /etc/ufw/after.rules
+
+    cp -v /etc/ufw/after6.rules /etc/ufw/after6.rules~2009-02-14-0731
+    sed -i -e '/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d' /etc/ufw/after6.rules
+    diff /etc/ufw/after6.rules~2009-02-14-0731 /etc/ufw/after6.rules
+
+    # Expect no docker service rm call
+    rm -v /usr/local/bin/ufw-docker
+    rm -v /usr/local/man/man8/ufw-docker.8
+}
+
+test-ufw-docker--uninstall-missing-files() {
+    setup-ufw-docker--uninstall
+    @mockfalse [ -f /usr/local/bin/ufw-docker ]   # Binary missing
+    @mockfalse [ -f /usr/local/man/man8/ufw-docker.8 ] # Man page missing
+
+    load-ufw-docker-function ufw-docker--uninstall
+
+    ufw-docker--uninstall
+}
+test-ufw-docker--uninstall-missing-files-assert() {
+    cp -v /etc/ufw/after.rules /etc/ufw/after.rules~2009-02-14-0731
+    sed -i -e '/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d' /etc/ufw/after.rules
+    diff /etc/ufw/after.rules~2009-02-14-0731 /etc/ufw/after.rules
+
+    cp -v /etc/ufw/after6.rules /etc/ufw/after6.rules~2009-02-14-0731
+    sed -i -e '/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d' /etc/ufw/after6.rules
+    diff /etc/ufw/after6.rules~2009-02-14-0731 /etc/ufw/after6.rules
+
+    docker service rm ufw-docker-agent
+
+    # Expect no rm calls for missing files
 }

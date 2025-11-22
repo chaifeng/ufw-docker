@@ -578,7 +578,7 @@ function ufw-docker--install() {
 
         err "\\nInstalling man page to '${man_location}'"
         mkdir -p "$(dirname "${man_location}")"
-        man-page | tee "${man_location}"
+        man-page | tee "${man_location}" >/dev/null
         mandb -q
     fi
 
@@ -608,63 +608,35 @@ function get_restore6_file() {
 }
 
 function ufw-docker--uninstall() {
-    # restore ufw rules
-    local restore_failed=false
-    local failed=false
-
-    restore_file=$(get_restore_file || true)
-    if [ -z "${restore_file}" ]; then
-        restore_failed=true
-    else
-        err "restoring '${after_rules}'"
-        cp ${restore_file} ${after_rules}
+    local changed=false
+    local backup_suffix="$(date '+%Y-%m-%d-%H%M')"
+    if grep -F 'UFW DOCKER' "$after_rules" >/dev/null; then
+        cp -v "$after_rules" "${after_rules}~${backup_suffix}"
+        sed -i -e '/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d' "$after_rules"
+        ! diff "${after_rules}~${backup_suffix}" "${after_rules}"
+        changed=true
+    fi
+    if grep -F 'UFW DOCKER' "$after6_rules" >/dev/null; then
+        cp -v "$after6_rules" "${after6_rules}~${backup_suffix}"
+        sed -i -e '/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d' "$after6_rules"
+        ! diff "${after6_rules}~${backup_suffix}" "${after6_rules}"
+        changed=true
     fi
 
-    if command -v ip6tables >/dev/null 2>&1; then
-        restore6_file=$(get_restore6_file || true)
-        if [ -z "${restore6_file}" ]; then
-            restore_failed=true
+    if docker service inspect "$ufw_docker_agent" >/dev/null; then
+        docker service rm "$ufw_docker_agent"
+    fi
+
+    if [ -f "$bin_location" ]; then rm -v "$bin_location"; fi
+    if [ -f "$man_location" ]; then rm -v "$man_location"; fi
+
+    if "$changed"; then
+        err "\\nPlease restart UFW service manually by using the following command:"
+        if type systemctl &>/dev/null; then
+            err "    sudo systemctl restart ufw"
         else
-            err "restoring '${after6_rules}'"
-            cp ${restore6_file} ${after6_rules}
+            err "    sudo service ufw restart"
         fi
-    fi
-
-    if "$restore_failed"; then
-        err "restoring of some files failed, cleanup '${after_rules}' and '${after6_rules}' yourself."
-        failed=true
-    else
-        # delete backup files
-        err "deleting backup files"
-
-        shopt -s nullglob   # allow '*' expansion
-        cd $(dirname ${after_rules})
-        local files=( $file_name )
-        #printf '%s\n' "${files[@]}"
-        rm -- ${files[@]}
-        cd - >/dev/null
-
-        cd $(dirname ${after6_rules})
-        local files6=( $file6_name )
-        #printf '%s\n' "${files6[@]}"
-        rm -- ${files6[@]}
-        cd - >/dev/null
-        shopt -u nullglob
-    fi
-
-    # delete files
-    if [ -n "$(dirname ${man_location})" ] && [ -n "$(dirname ${bin_location})" ]; then
-        err "deleting: $man_location, $bin_location"
-        rm -f ${man_location} ${bin_location}
-    else
-        err "'\$man_location' or '\$bin_location' are not valid, will not remove any files."
-        failed=true
-    fi
-    
-    if ! "$failed"; then
-        err "\e[1mUninstall successful!\e[0m"
-    else
-        exit 1
     fi
 }
 

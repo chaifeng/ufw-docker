@@ -445,9 +445,11 @@ function ufw-docker--check-install() {
         cat <<-\EOF
 	# BEGIN UFW AND DOCKER
 	*filter
+	:ufw-before-forward - [0:0]
 	:ufw-user-forward - [0:0]
 	:ufw-docker-logging-deny - [0:0]
 	:DOCKER-USER - [0:0]
+	-A DOCKER-USER -j ufw-before-forward
 	-A DOCKER-USER -j ufw-user-forward
 
 	EOF

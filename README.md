@@ -70,9 +70,11 @@ Modify the UFW configuration file `/etc/ufw/after.rules` and add the following r
 
     # BEGIN UFW AND DOCKER
     *filter
+    :ufw-before-forward - [0:0]
     :ufw-user-forward - [0:0]
     :ufw-docker-logging-deny - [0:0]
     :DOCKER-USER - [0:0]
+    -A DOCKER-USER -j ufw-before-forward
     -A DOCKER-USER -j ufw-user-forward
 
     -A DOCKER-USER -j RETURN -s 10.0.0.0/8
@@ -128,6 +130,7 @@ The following rules allow the private networks to be able to visit each other. N
 
 The following rules allow UFW to manage whether the public networks are allowed to visit the services provided by the Docker container. So that we can manage all firewall rules in one place.
 
+    -A DOCKER-USER -j ufw-before-forward
     -A DOCKER-USER -j ufw-user-forward
 
 For example, we want to block all outgoing connections from inside a container whose IP address is 172.17.0.9 which means to block this container to access internet or external networks. Using the following command:
@@ -432,9 +435,11 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 
     # BEGIN UFW AND DOCKER
     *filter
+    :ufw-before-forward - [0:0]
     :ufw-user-forward - [0:0]
     :ufw-docker-logging-deny - [0:0]
     :DOCKER-USER - [0:0]
+    -A DOCKER-USER -j ufw-before-forward
     -A DOCKER-USER -j ufw-user-forward
 
     -A DOCKER-USER -j RETURN -s 10.0.0.0/8

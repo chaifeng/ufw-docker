@@ -366,6 +366,22 @@ We can access the `web` service from our host now
 
     curl "http://192.168.56.13{0,1,2}:8080"
 
+## Running Tests
+
+This project uses [Vagrant](https://www.vagrantup.com/) to provision the testing environment. It will start 4 nodes: one master, two worker nodes, and one node to simulate external network access. The Ubuntu and Docker versions in the Vagrantfile are read from the Dockerfile.
+
+The unit tests use the [Bach Unit Testing Framework](https://bach.sh). You can run the tests using `./test.sh` or by running the test case files in the `test` directory directly.
+
+If you encounter any issues, please use the Vagrantfile to reproduce the problem.
+
+IPv6 is disabled by default. You can enable it by running:
+
+    env ENABLE_DOCKER_IPV6=true vagrant up
+
+You can also specify a local Docker registry mirror using `DOCKER_REGISTRY_MIRROR`:
+
+    env DOCKER_REGISTRY_MIRROR=http://192.168.1.100:5000 vagrant up
+
 ## Discussions
 
 - [What is the best practice of docker + ufw under Ubuntu - Stack Overflow](https://stackoverflow.com/questions/30383845/what-is-the-best-practice-of-docker-ufw-under-ubuntu/51741599#comment91451547_51741599)
@@ -715,6 +731,22 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 现在我们可以在我们的主机上访问这个 `web` 服务了
 
     curl "http://192.168.56.13{0,1,2}:8080"
+
+## 运行测试
+
+本项目使用 [Vagrant](https://www.vagrantup.com/) 来准备测试环境。它会启动 4 个节点：一个 master，两个 worker 节点，以及一个用于模拟外部网络访问的节点。Vagrantfile 中的 Ubuntu 和 Docker 版本是从 Dockerfile 中读取的。
+
+单元测试使用的是 [Bach Unit Testing Framework](https://bach.sh)。你可以使用 `./test.sh` 来运行测试，或者直接运行 `test` 目录中的测试用例文件。
+
+如果你遇到了问题，请使用 Vagrantfile 来重现问题。
+
+IPv6 默认是禁用的。你可以通过以下命令来启用它：
+
+    env ENABLE_DOCKER_IPV6=true vagrant up
+
+你还可以使用 `DOCKER_REGISTRY_MIRROR` 来指定本地的 Docker registry 镜像地址：
+
+    env DOCKER_REGISTRY_MIRROR=http://192.168.1.100:5000 vagrant up
 
 ## 讨论
 

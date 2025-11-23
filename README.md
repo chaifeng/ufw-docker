@@ -292,6 +292,10 @@ Show help
 
     ufw-docker help
 
+Show the man page
+
+    ufw-docker man
+
 Check the installation of firewall rules in UFW configurations
 
     ufw-docker check
@@ -347,6 +351,8 @@ Expose the port `80` of the service `web`
 Remove rules from all nodes related to the service `web`
 
     ufw-docker service delete allow web
+
+    ufw-docker service delete allow web 80/tcp
 
 ### Try it out
 
@@ -669,6 +675,10 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 显示帮助
 
     ufw-docker help
+
+显示 man page
+
+    ufw-docker man
 
 检查 UFW 配置文件中防火墙规则的安装
 

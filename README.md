@@ -267,6 +267,16 @@ This option applies to both IPv4 and IPv6 networks.
 
 You can use the same options with `ufw-docker check` to preview the changes before applying them.
 
+### Using the `--system` option
+
+If you want to install the `ufw-docker` script and the man page to the system, you can use the `--system` option.
+
+    ufw-docker install --system
+
+This command will:
+- Install the `ufw-docker` script to `/usr/local/bin/ufw-docker`
+- Install the man page to `/usr/local/man/man8/ufw-docker.8`
+
 #### Install for Docker Swarm mode
 
 We can only use this script on manager nodes to manage firewall rules when using in Swarm mode.
@@ -634,6 +644,16 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 
     # 仅允许这些指定的子网与 Docker 容器通信
     ufw-docker install --docker-subnets 192.168.207.0/24 10.207.0.0/16 fd00:cf::/64
+
+### 使用 `--system` 选项
+
+如果你希望把 `ufw-docker` 脚本和 man page 安装到系统中，可以使用 `--system` 选项。
+
+    ufw-docker install --system
+
+这个命令将会：
+- 安装 `ufw-docker` 脚本到 `/usr/local/bin/ufw-docker`
+- 安装 man page 到 `/usr/local/man/man8/ufw-docker.8`
 
 #### 为 Docker Swarm 环境安装
 

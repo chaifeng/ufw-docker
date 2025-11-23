@@ -26,6 +26,8 @@ source "$working_dir"/bach/bach.sh
     UFW_DOCKER_AGENT_IMAGE=chaifeng/ufw-docker-agent:090502-legacy
 
     @mock man-page === @stdout "MAN PAGE FOR UFW-DOCKER"
+
+    @allow-real sort
 }
 
 function ufw-docker() {
@@ -795,18 +797,16 @@ test-check-install-ipv4-assert() {
 :DOCKER-USER - [0:0]
 -A DOCKER-USER -j ufw-user-forward
 
+-A DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+-A DOCKER-USER -m conntrack --ctstate INVALID -j DROP
+-A DOCKER-USER -i docker0 -o docker0 -j ACCEPT
+
 -A DOCKER-USER -j RETURN -s 10.0.0.0/8
 -A DOCKER-USER -j RETURN -s 172.16.0.0/12
 -A DOCKER-USER -j RETURN -s 192.168.0.0/16
-
--A DOCKER-USER -p udp -m udp --sport 53 --dport 1024:65535 -j RETURN
-
--A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 10.0.0.0/8
--A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 172.16.0.0/12
--A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 192.168.0.0/16
--A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 10.0.0.0/8
--A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 172.16.0.0/12
--A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 192.168.0.0/16
+-A DOCKER-USER -j ufw-docker-logging-deny -m conntrack --ctstate NEW -d 10.0.0.0/8
+-A DOCKER-USER -j ufw-docker-logging-deny -m conntrack --ctstate NEW -d 172.16.0.0/12
+-A DOCKER-USER -j ufw-docker-logging-deny -m conntrack --ctstate NEW -d 192.168.0.0/16
 
 -A DOCKER-USER -j RETURN
 
@@ -841,15 +841,14 @@ test-check-install-ipv4-with-subnets-assert() {
 :DOCKER-USER - [0:0]
 -A DOCKER-USER -j ufw-user-forward
 
+-A DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+-A DOCKER-USER -m conntrack --ctstate INVALID -j DROP
+-A DOCKER-USER -i docker0 -o docker0 -j ACCEPT
+
 -A DOCKER-USER -j RETURN -s 172.16.0.0/12
 -A DOCKER-USER -j RETURN -s 192.168.56.128/28
-
--A DOCKER-USER -p udp -m udp --sport 53 --dport 1024:65535 -j RETURN
-
--A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 172.16.0.0/12
--A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 192.168.56.128/28
--A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 172.16.0.0/12
--A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 192.168.56.128/28
+-A DOCKER-USER -j ufw-docker-logging-deny -m conntrack --ctstate NEW -d 172.16.0.0/12
+-A DOCKER-USER -j ufw-docker-logging-deny -m conntrack --ctstate NEW -d 192.168.56.128/28
 
 -A DOCKER-USER -j RETURN
 
@@ -860,6 +859,48 @@ COMMIT
 # END UFW AND DOCKER
 EOF
     diff -u --color=auto /etc/ufw/after.rules /tmp/after_rules_tmp
+}
+
+test-check-install-ipv6-with-subnets() {
+    @mock ufw-docker--list-docker-subnets IPv6 fd00:cf::/64 fd00::/8 === @stdout "fd00::/8" "fd00:cf::/64"
+    @mock mktemp === @stdout /tmp/after6_rules_tmp
+    @mock sed "/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d" /etc/ufw/after6.rules
+    @mock tee "/tmp/after6_rules_tmp"
+    @capture tee -a /tmp/after6_rules_tmp
+    @allow-real cat
+
+    load-ufw-docker-function ufw-docker--check-install_ipv6
+    ufw-docker--check-install_ipv6 --docker-subnets fd00:cf::/64 fd00::/8
+}
+test-check-install-ipv6-with-subnets-assert() {
+    rm-on-exit /tmp/after6_rules_tmp
+    sed "/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d" /etc/ufw/after6.rules
+    @assert-capture tee -a /tmp/after6_rules_tmp <<\EOF
+# BEGIN UFW AND DOCKER
+*filter
+:ufw6-user-forward - [0:0]
+:ufw6-docker-logging-deny - [0:0]
+:DOCKER-USER - [0:0]
+-A DOCKER-USER -j ufw6-user-forward
+
+-A DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+-A DOCKER-USER -m conntrack --ctstate INVALID -j DROP
+-A DOCKER-USER -i docker0 -o docker0 -j ACCEPT
+
+-A DOCKER-USER -j RETURN -s fd00::/8
+-A DOCKER-USER -j RETURN -s fd00:cf::/64
+-A DOCKER-USER -j ufw6-docker-logging-deny -m conntrack --ctstate NEW -d fd00::/8
+-A DOCKER-USER -j ufw6-docker-logging-deny -m conntrack --ctstate NEW -d fd00:cf::/64
+
+-A DOCKER-USER -j RETURN
+
+-A ufw6-docker-logging-deny -m limit --limit 3/min --limit-burst 10 -j LOG --log-prefix "[UFW DOCKER BLOCK] "
+-A ufw6-docker-logging-deny -j DROP
+
+COMMIT
+# END UFW AND DOCKER
+EOF
+    diff -u --color=auto /etc/ufw/after6.rules /tmp/after6_rules_tmp
 }
 
 test-man-command() {
@@ -1001,4 +1042,48 @@ test-ufw-docker--uninstall-missing-files-assert() {
     docker service rm ufw-docker-agent
 
     # Expect no rm calls for missing files
+}
+
+test-list-docker-subnets-ipv4-auto() {
+    @mock docker network ls --format '{{.ID}}' === @stdout "net1" "net2"
+    @mock docker network inspect "net1" --format '{{range .IPAM.Config}}{{.Subnet}}{{"\n"}}{{end}}' === @stdout "172.18.0.0/16"
+    @mock docker network inspect "net2" --format '{{range .IPAM.Config}}{{.Subnet}}{{"\n"}}{{end}}' === @stdout "172.19.0.0/16"
+
+    load-ufw-docker-function ufw-docker--list-docker-subnets
+    ufw-docker--list-docker-subnets IPv4
+}
+test-list-docker-subnets-ipv4-auto-assert() {
+    @stdout "172.18.0.0/16"
+    @stdout "172.19.0.0/16"
+}
+
+test-list-docker-subnets-ipv6-auto() {
+    @mock docker network ls --format '{{.ID}}' === @stdout "net1" "net2"
+    @mock docker network inspect "net1" --format '{{range .IPAM.Config}}{{.Subnet}}{{"\n"}}{{end}}' === @stdout "fd00:1::/64"
+    @mock docker network inspect "net2" --format '{{range .IPAM.Config}}{{.Subnet}}{{"\n"}}{{end}}' === @stdout "fd00:2::/64"
+
+    load-ufw-docker-function ufw-docker--list-docker-subnets
+    ufw-docker--list-docker-subnets IPv6
+}
+test-list-docker-subnets-ipv6-auto-assert() {
+    @stdout "fd00:1::/64"
+    @stdout "fd00:2::/64"
+}
+
+test-list-docker-subnets-ipv4-manual() {
+    load-ufw-docker-function ufw-docker--list-docker-subnets
+    ufw-docker--list-docker-subnets IPv4 10.0.0.0/8 fd00::/8 192.168.0.0/16
+}
+test-list-docker-subnets-ipv4-manual-assert() {
+    @stdout "10.0.0.0/8"
+    @stdout "192.168.0.0/16"
+}
+
+test-list-docker-subnets-ipv6-manual() {
+    load-ufw-docker-function ufw-docker--list-docker-subnets
+    ufw-docker--list-docker-subnets IPv6 10.0.0.0/8 fd00::/8 2001:db8::/32
+}
+test-list-docker-subnets-ipv6-manual-assert() {
+    @stdout "2001:db8::/32"
+    @stdout "fd00::/8"
 }

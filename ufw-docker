@@ -450,23 +450,18 @@ function ufw-docker--check-install() {
 	:DOCKER-USER - [0:0]
 	-A DOCKER-USER -j ufw-user-forward
 
+	-A DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+	-A DOCKER-USER -m conntrack --ctstate INVALID -j DROP
+	-A DOCKER-USER -i docker0 -o docker0 -j ACCEPT
+
 	EOF
 
         for cidr in "${cidr_list[@]}"; do
 	          echo "-A DOCKER-USER -j RETURN -s ${cidr}"
         done
 
-        cat <<-\EOF
-
-	-A DOCKER-USER -p udp -m udp --sport 53 --dport 1024:65535 -j RETURN
-
-	EOF
-
         for cidr in "${cidr_list[@]}"; do
-	          echo "-A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d ${cidr}"
-        done
-        for cidr in "${cidr_list[@]}"; do
-	          echo "-A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d ${cidr}"
+	          echo "-A DOCKER-USER -j ufw-docker-logging-deny -m conntrack --ctstate NEW -d ${cidr}"
         done
 
         cat <<-\EOF
@@ -510,19 +505,18 @@ function ufw-docker--check-install_ipv6() {
 	:DOCKER-USER - [0:0]
 	-A DOCKER-USER -j ufw6-user-forward
 
+	-A DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+	-A DOCKER-USER -m conntrack --ctstate INVALID -j DROP
+	-A DOCKER-USER -i docker0 -o docker0 -j ACCEPT
+
 	EOF
 
         for cidr in "${cidr6_list[@]}"; do
 	          echo "-A DOCKER-USER -j RETURN -s ${cidr}"
         done
 
-        cat <<-\EOF
-	-A DOCKER-USER -p udp -m udp --sport 53 --dport 1024:65535 -j RETURN
-	EOF
-
         for cidr in "${cidr6_list[@]}"; do
-	          echo "-A DOCKER-USER -j ufw6-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d ${cidr}"
-	          echo "-A DOCKER-USER -j ufw6-docker-logging-deny -p udp -m udp --dport 0:32767 -d ${cidr}"
+	          echo "-A DOCKER-USER -j ufw6-docker-logging-deny -m conntrack --ctstate NEW -d ${cidr}"
         done
 
         cat <<-\EOF

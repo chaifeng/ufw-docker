@@ -146,6 +146,7 @@ Vagrant.configure('2') do |config|
         docker build -t #{private_registry}/chaifeng/hostname-webapp - <<\\DOCKERFILE
 FROM httpd:alpine
 
+RUN apk add --no-cache socat
 RUN printf "Listen %s\\n" 7000 8080 >> /usr/local/apache2/conf/httpd.conf
 
 RUN { echo '#!/bin/sh'; \\
@@ -171,6 +172,32 @@ DOCKERFILE
         done
 
         ufw-docker allow public_webapp
+    SHELL
+
+    master.vm.provision "test-cases-setup", preserve_order: true, type: 'shell', inline: <<-SHELL
+        set -xeuo pipefail
+
+        # UDP Test Setup
+        if docker inspect udp-echo &>/dev/null; then docker rm -f udp-echo; fi
+        docker run -d --restart unless-stopped --name udp-echo \
+            -p 30000:30000/udp #{private_registry}/chaifeng/hostname-webapp \
+            sh -c 'socat UDP6-LISTEN:30000,fork EXEC:cat & socat UDP-LISTEN:30000,fork EXEC:cat & wait'
+
+        ufw-docker allow udp-echo 30000/udp
+
+        # UDP Deny Test Setup
+        if docker inspect udp-deny &>/dev/null; then docker rm -f udp-deny; fi
+        docker run -d --restart unless-stopped --name udp-deny \
+            -p 30001:30000/udp #{private_registry}/chaifeng/hostname-webapp \
+            sh -c 'socat UDP6-LISTEN:30000,fork EXEC:cat & socat UDP-LISTEN:30000,fork EXEC:cat & wait'
+
+        # Delete Rule Test Setup
+        if docker inspect deleted-webapp &>/dev/null; then docker rm -f deleted-webapp; fi
+        docker run -d --restart unless-stopped --name deleted-webapp \
+            -p 18081:80 --env name="deleted-webapp" #{private_registry}/chaifeng/hostname-webapp
+
+        ufw-docker allow deleted-webapp
+        ufw-docker delete allow deleted-webapp
     SHELL
 
     master.vm.provision "multiple-network", preserve_order: true, type: 'shell', inline: <<-SHELL
@@ -285,6 +312,40 @@ DOCKERFILE
           fi
         } 2>/dev/null
 
+        function test-udp() {
+          local expect_fail="${1}"
+          if [[ "$expect_fail" == "!" ]]; then
+            shift
+          else
+            expect_fail=""
+          fi
+          local host="$1"
+          # Remove brackets for IPv6
+          host="${host#[}"
+          host="${host%]}"
+          local port="$2"
+          local payload="udp-test"
+          local response
+          
+          response=$(echo -n "$payload" | nc -u -w 1 "$host" "$port" 2>/dev/null || true)
+          
+          if [[ "$response" == "$payload" ]]; then
+            if [[ "$expect_fail" == "!" ]]; then
+              echo "FAIL: UDP $host:$port IS accessible (should NOT be)."
+              (( ++ error_count ))
+            else
+              echo "OK: UDP $host:$port is accessible."
+            fi
+          else
+            if [[ "$expect_fail" == "!" ]]; then
+              echo "OK: UDP $host:$port is NOT accessible."
+            else
+              echo "FAIL: UDP $host:$port is NOT accessible (expected '$payload', got '$response')."
+              (( ++ error_count ))
+            fi
+          fi
+        }
+
         function run_tests() {
           local server="$1"
           test-webapp "$server:18080"
@@ -292,6 +353,14 @@ DOCKERFILE
 
           test-webapp "$server:17070" # multiple networks app
           test-webapp ! "$server:7000" # internal multiple networks app
+
+          # UDP Test
+          local host="${server#*://}"
+          test-udp "$host" 30000
+          test-udp ! "$host" 30001
+
+          # Delete Rule Test
+          test-webapp ! "$server:18081"
 
           # Docker Swarm
           test-webapp ! "$server:9000"
@@ -315,6 +384,8 @@ DOCKERFILE
           test-webapp ! "$server:40080" # it is accessible via IPv4
           test-webapp ! "$server:48080" # it is accessible via IPv4
 
+          # Delete Rule Test (IPv6)
+          test-webapp ! "$server:18081"
         }
 
         run_tests "http://#{ip_prefix}.130"

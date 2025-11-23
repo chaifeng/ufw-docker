@@ -75,18 +75,17 @@ Modify the UFW configuration file `/etc/ufw/after.rules` and add the following r
     :DOCKER-USER - [0:0]
     -A DOCKER-USER -j ufw-user-forward
 
+    -A DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+    -A DOCKER-USER -m conntrack --ctstate INVALID -j DROP
+    -A DOCKER-USER -i docker0 -o docker0 -j ACCEPT
+
     -A DOCKER-USER -j RETURN -s 10.0.0.0/8
     -A DOCKER-USER -j RETURN -s 172.16.0.0/12
     -A DOCKER-USER -j RETURN -s 192.168.0.0/16
 
-    -A DOCKER-USER -p udp -m udp --sport 53 --dport 1024:65535 -j RETURN
-
-    -A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 192.168.0.0/16
-    -A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 10.0.0.0/8
-    -A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 172.16.0.0/12
-    -A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 192.168.0.0/16
-    -A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 10.0.0.0/8
-    -A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 172.16.0.0/12
+    -A DOCKER-USER -j ufw-docker-logging-deny -m conntrack --ctstate NEW -d 10.0.0.0/8
+    -A DOCKER-USER -j ufw-docker-logging-deny -m conntrack --ctstate NEW -d 172.16.0.0/12
+    -A DOCKER-USER -j ufw-docker-logging-deny -m conntrack --ctstate NEW -d 192.168.0.0/16
 
     -A DOCKER-USER -j RETURN
 
@@ -120,19 +119,65 @@ Similarly, if only for a specific container, such as IP address `172.17.0.2`:
 
 ## How it works?
 
+The following rules allow UFW to manage whether the public networks are allowed to visit the services provided by the Docker container. So that we can manage all firewall rules in one place.
+
+    -A DOCKER-USER -j ufw-user-forward
+
 The following rules allow the private networks to be able to visit each other. Normally, private networks are more trusted than public networks.
 
     -A DOCKER-USER -j RETURN -s 10.0.0.0/8
     -A DOCKER-USER -j RETURN -s 172.16.0.0/12
     -A DOCKER-USER -j RETURN -s 192.168.0.0/16
 
-The following rules allow UFW to manage whether the public networks are allowed to visit the services provided by the Docker container. So that we can manage all firewall rules in one place.
+The following rules allow established and related connections, so that return traffic is accepted.
 
+    -A DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+
+The following rules allow internal Docker communication (e.g. between containers on the default bridge).
+
+    -A DOCKER-USER -i docker0 -o docker0 -j ACCEPT
+
+The following rules block connection requests initiated by all public networks, but allow internal networks to access external networks.
+
+    -A DOCKER-USER -j ufw-docker-logging-deny -m conntrack --ctstate NEW -d 10.0.0.0/8
+    -A DOCKER-USER -j ufw-docker-logging-deny -m conntrack --ctstate NEW -d 172.16.0.0/12
+    -A DOCKER-USER -j ufw-docker-logging-deny -m conntrack --ctstate NEW -d 192.168.0.0/16
+
+## Legacy Solution (without conntrack)
+
+If you are using an older kernel or prefer the old solution, you can use the following rules.
+
+Modify the UFW configuration file `/etc/ufw/after.rules` and add the following rules at the end of the file:
+
+    # BEGIN UFW AND DOCKER
+    *filter
+    :ufw-user-forward - [0:0]
+    :ufw-docker-logging-deny - [0:0]
+    :DOCKER-USER - [0:0]
     -A DOCKER-USER -j ufw-user-forward
 
-For example, we want to block all outgoing connections from inside a container whose IP address is 172.17.0.9 which means to block this container to access internet or external networks. Using the following command:
+    -A DOCKER-USER -j RETURN -s 10.0.0.0/8
+    -A DOCKER-USER -j RETURN -s 172.16.0.0/12
+    -A DOCKER-USER -j RETURN -s 192.168.0.0/16
 
-    ufw route deny from 172.17.0.9 to any
+    -A DOCKER-USER -p udp -m udp --sport 53 --dport 1024:65535 -j RETURN
+
+    -A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 192.168.0.0/16
+    -A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 10.0.0.0/8
+    -A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 172.16.0.0/12
+    -A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 192.168.0.0/16
+    -A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 10.0.0.0/8
+    -A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 172.16.0.0/12
+
+    -A DOCKER-USER -j RETURN
+
+    -A ufw-docker-logging-deny -m limit --limit 3/min --limit-burst 10 -j LOG --log-prefix "[UFW DOCKER BLOCK] "
+    -A ufw-docker-logging-deny -j DROP
+
+    COMMIT
+    # END UFW AND DOCKER
+
+### How it works (Legacy)
 
 The following rules block connection requests initiated by all public networks, but allow internal networks to access external networks. For TCP protocol, it prevents from actively establishing a TCP connection from public networks. For UDP protocol, all accesses to ports which is less then 32767 are blocked. Why is this port? Since the UDP protocol is stateless, it is not possible to block the handshake signal that initiates the connection request as TCP does. For GNU/Linux we can find the local port range in the file `/proc/sys/net/ipv4/ip_local_port_range`. The default range is `32768 60999`. When accessing a UDP protocol service from a running container, the local port will be randomly selected one from the port range, and the server will return the data to this random port. Therefore, we can assume that the listening port of the UDP protocol inside all containers are less then `32768`. This is the reason that we don't want public networks to access the UDP ports that less then `32768`.
 
@@ -469,18 +514,17 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
     :DOCKER-USER - [0:0]
     -A DOCKER-USER -j ufw-user-forward
 
+    -A DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+    -A DOCKER-USER -m conntrack --ctstate INVALID -j DROP
+    -A DOCKER-USER -i docker0 -o docker0 -j ACCEPT
+
     -A DOCKER-USER -j RETURN -s 10.0.0.0/8
     -A DOCKER-USER -j RETURN -s 172.16.0.0/12
     -A DOCKER-USER -j RETURN -s 192.168.0.0/16
 
-    -A DOCKER-USER -p udp -m udp --sport 53 --dport 1024:65535 -j RETURN
-
-    -A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 192.168.0.0/16
-    -A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 10.0.0.0/8
-    -A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 172.16.0.0/12
-    -A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 192.168.0.0/16
-    -A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 10.0.0.0/8
-    -A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 172.16.0.0/12
+    -A DOCKER-USER -j ufw-docker-logging-deny -m conntrack --ctstate NEW -d 10.0.0.0/8
+    -A DOCKER-USER -j ufw-docker-logging-deny -m conntrack --ctstate NEW -d 172.16.0.0/12
+    -A DOCKER-USER -j ufw-docker-logging-deny -m conntrack --ctstate NEW -d 192.168.0.0/16
 
     -A DOCKER-USER -j RETURN
 
@@ -524,9 +568,55 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 
     -A DOCKER-USER -j ufw-user-forward
 
-例如，我们要阻止一个 IP 地址为 172.17.0.9 的容器内的所有对外连接，也就是阻止该容器访问外部网络，使用下列命令
+下面的规则允许已建立的连接和相关连接，以便返回流量被接受。
 
-    ufw route deny from 172.17.0.9 to any
+    -A DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+
+下面的规则允许 Docker 内部通信（例如默认网桥上的容器之间）。
+
+    -A DOCKER-USER -i docker0 -o docker0 -j ACCEPT
+
+下面的规则阻止了所有外部网络发起的连接请求，但是允许内部网络访问外部网络。
+
+    -A DOCKER-USER -j ufw-docker-logging-deny -m conntrack --ctstate NEW -d 10.0.0.0/8
+    -A DOCKER-USER -j ufw-docker-logging-deny -m conntrack --ctstate NEW -d 172.16.0.0/12
+    -A DOCKER-USER -j ufw-docker-logging-deny -m conntrack --ctstate NEW -d 192.168.0.0/16
+
+### 旧的解决方案（不使用 conntrack）
+
+如果您使用的是较旧的内核或更喜欢旧的解决方案，可以使用以下规则。
+
+修改 UFW 的配置文件 `/etc/ufw/after.rules`，在最后添加上如下规则：
+
+    # BEGIN UFW AND DOCKER
+    *filter
+    :ufw-user-forward - [0:0]
+    :ufw-docker-logging-deny - [0:0]
+    :DOCKER-USER - [0:0]
+    -A DOCKER-USER -j ufw-user-forward
+
+    -A DOCKER-USER -j RETURN -s 10.0.0.0/8
+    -A DOCKER-USER -j RETURN -s 172.16.0.0/12
+    -A DOCKER-USER -j RETURN -s 192.168.0.0/16
+
+    -A DOCKER-USER -p udp -m udp --sport 53 --dport 1024:65535 -j RETURN
+
+    -A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 192.168.0.0/16
+    -A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 10.0.0.0/8
+    -A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 172.16.0.0/12
+    -A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 192.168.0.0/16
+    -A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 10.0.0.0/8
+    -A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 172.16.0.0/12
+
+    -A DOCKER-USER -j RETURN
+
+    -A ufw-docker-logging-deny -m limit --limit 3/min --limit-burst 10 -j LOG --log-prefix "[UFW DOCKER BLOCK] "
+    -A ufw-docker-logging-deny -j DROP
+
+    COMMIT
+    # END UFW AND DOCKER
+
+### 解释（旧方案）
 
 下面的规则阻止了所有外部网络发起的连接请求，但是允许内部网络访问外部网络。对于 TCP 协议，是阻止了从外部网络主动建立 TCP 连接。对于 UDP，是阻止了所有小余端口 `32767` 的访问。为什么是这个端口的？由于 UDP 协议是无状态的，无法像 TCP 那样阻止发起建立连接请求的握手信号。在 GNU/Linux 上查看文件 `/proc/sys/net/ipv4/ip_local_port_range` 可以看到发出 TCP/UDP 数据后，本地源端口的范围，默认为 `32768 60999`。当从一个运行的容器对外访问一个 UDP 协议的服务时，本地端口将会从这个端口范围里面随机选择一个，服务器将会把数据返回到这个随机端口上。所以，我们可以假定所有容器内部的 UDP 协议的监听端口都小余 `32768`，不允许外部网络主动连接小余 `32768` 的 UDP 端口。
 

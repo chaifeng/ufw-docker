@@ -30,11 +30,11 @@ Vagrant.configure('2') do |config|
 
   ip_prefix="192.168.56"
   ip6_prefix="fd00:a:b"
-  worker_count=1
+  worker_count=2
 
   def env_true?(env_name)
     value = ENV[env_name] || 'false'
-    true_values  = %w[true yes on 1]
+    true_values  = %w[true yes on 1 y]
     down = value.strip.downcase
     return 'true' if true_values.include?(down)
     'false'
@@ -46,6 +46,20 @@ Vagrant.configure('2') do |config|
 
   config.vm.provision 'setup', preserve_order: true, type: 'shell', privileged: false, inline: <<-SHELL
     byobu-ctrl-a screen
+  SHELL
+
+  config.vm.provision 'setup-iptables', preserve_order: true, type: 'shell', privileged: true, inline: <<-SHELL
+    if #{env_true_str?('USE_IPTABLES_LEGACY')}; then
+      echo "Using legacy iptables"
+      # switch to legacy iptables
+      update-alternatives --set iptables /usr/sbin/iptables-legacy
+      update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
+    else
+      echo "Using nf_tables"
+      # switch to nf_tables
+      update-alternatives --set iptables /usr/sbin/iptables-nft
+      update-alternatives --set ip6tables /usr/sbin/ip6tables-nft
+    fi
   SHELL
 
   config.vm.provision 'docker-daemon-config',  type: 'shell', inline: <<-SHELL
@@ -105,8 +119,7 @@ Vagrant.configure('2') do |config|
 
     master.vm.provision "unit-testing", preserve_order: true, type: 'shell', privileged: false, inline: <<-SHELL
         set -euo pipefail
-        [[ -n "#{ENV['DISABLE_UNIT_TESTING']}" ]] ||
-           /vagrant/test.sh
+        "#{env_true_str?('DISABLE_UNIT_TESTING')}" || /vagrant/test.sh
     SHELL
 
     master.vm.provision "docker-registry", preserve_order: true, type: 'docker' do |d|
@@ -146,7 +159,7 @@ Vagrant.configure('2') do |config|
         docker build -t #{private_registry}/chaifeng/hostname-webapp - <<\\DOCKERFILE
 FROM httpd:alpine
 
-RUN apk add --no-cache socat
+RUN apk add --no-cache socat curl
 RUN printf "Listen %s\\n" 7000 8080 >> /usr/local/apache2/conf/httpd.conf
 
 RUN { echo '#!/bin/sh'; \\
@@ -252,6 +265,162 @@ DOCKERFILE
 
         ufw-docker service allow public_multiport 80/tcp
         ufw-docker service allow public_multiport 8080/tcp
+
+        # --- New Overlay Network Test Setup ---
+        if ! docker network ls | grep -F test-overlay; then
+            docker network create --driver overlay test-overlay
+        fi
+
+        # Service A: 8080->80 (Allow), 8081->8080 (Block)
+        if docker service inspect test_service_a &>/dev/null; then docker service rm test_service_a; fi
+        docker service create --name test_service_a --network test-overlay \
+            --publish 8080:80 --publish 8081:8080 \
+            --env name="test_service_a" --replicas 1 \
+            #{private_registry}/chaifeng/hostname-webapp
+
+        ufw-docker service allow test_service_a 80/tcp
+        # 8081 is not allowed, so it should be blocked by default
+
+        # Service B: 9090->80 (Allow), 9091->8080 (Block)
+        if docker service inspect test_service_b &>/dev/null; then docker service rm test_service_b; fi
+        docker service create --name test_service_b --network test-overlay \
+            --publish 9090:80 --publish 9091:8080 \
+            --env name="test_service_b" --replicas 1 \
+            #{private_registry}/chaifeng/hostname-webapp
+
+        ufw-docker service allow test_service_b 80/tcp
+        # 9091 is not allowed, so it should be blocked by default
+    SHELL
+
+    TEST_WEBAPP_SCRIPT = <<~SHELL
+      exec 8>&2
+      BASH_XTRACEFD=8
+      export error_count=0
+
+      function test-webapp() {
+        local expect_success=""
+        local src_container
+        declare -a args=()
+        while [[ -n "${1:-}" ]]; do
+          case "$1" in
+            '!') expect_success='!' ;;
+            '--container') shift; src_container="${1}" ;;
+            *) args+=("$1") ;;
+          esac
+          shift
+        done
+        set -- "${args[@]}"
+        local target_url="${1}"
+        
+        echo "Testing connection from ${src_container:+container} ${src_container:-HOST} to $target_url (Expect $(if [ "$expect_success" = "!" ]; then echo -n "failure"; else echo -n "success"; fi))"
+        
+        declare -a cmd=(command)
+        [[ -z "${src_container:-}" ]] || cmd=(docker exec "$src_container")
+        cmd+=(curl -m 2 -v -o /dev/null "$target_url")
+        if "${cmd[@]}"; then
+          if [ "$expect_success" = "!" ]; then
+            echo "❌ FAILURE: Connection established but should have failed."
+            error_count=$(( error_count + 1 ))
+          else
+            echo "✅ SUCCESS: Connection established."
+          fi
+        else
+          if [ "$expect_success" = "!" ]; then
+            echo "✅ SUCCESS: Connection failed as expected."
+          else
+            echo "❌ FAILURE: Connection failed."
+            error_count=$(( error_count + 1 ))
+          fi
+        fi
+      } 8>/dev/null
+
+      function test-udp() {
+        local expect_fail="${1}"
+        if [[ "$expect_fail" == "!" ]]; then
+          shift
+        else
+          expect_fail=""
+        fi
+        local host="$1"
+        # Remove brackets for IPv6
+        host="${host#[}"
+        host="${host%]}"
+        local port="$2"
+        local payload="udp-test"
+        local response
+        
+        response=$(echo -n "$payload" | nc -u -w 1 "$host" "$port" 2>/dev/null || true)
+        
+        if [[ "$response" == "$payload" ]]; then
+          if [[ "$expect_fail" == "!" ]]; then
+            echo "FAIL: UDP $host:$port IS accessible (should NOT be)."
+            (( ++ error_count ))
+          else
+            echo "OK: UDP $host:$port is accessible."
+          fi
+        else
+          if [[ "$expect_fail" == "!" ]]; then
+            echo "OK: UDP $host:$port is NOT accessible."
+          else
+            echo "FAIL: UDP $host:$port is NOT accessible (expected '$payload', got '$response')."
+            (( ++ error_count ))
+          fi
+        fi
+      } 8>/dev/null
+    SHELL
+
+    TEST_WEBAPP_RESULT = <<~SHELL
+      {
+        echo ""
+        echo "==============================================="
+        if [[ "$error_count" -eq 0 ]]; then
+          echo "====     ✅ SUCCESS: All tests passed.     ===="
+        else 
+          echo "=== ❌ FAILURE: $error_count tests failed.  ==="
+        fi
+        echo "==============================================="
+        echo ""
+      } 8>/dev/null
+      exit "$error_count"
+    SHELL
+
+    master.vm.provision "test-container-communication", preserve_order: true, type: 'shell', inline: <<-SHELL
+      set -xeuo pipefail
+      #{TEST_WEBAPP_SCRIPT}
+
+      test-webapp --container "internal-multinet-app" "http://public-multinet-app:80"
+
+      # get the ip address of public_webapp
+      public_webapp_ip=$(docker inspect public_webapp | jq -r '.[0].NetworkSettings.Networks."bridge".IPAddress')
+      test-webapp ! --container "internal-multinet-app" "http://$public_webapp_ip:80" # Should fail (different networks)
+      
+      # --- New Overlay Network Verification ---
+      echo "=== Verifying Overlay Network Services ==="
+      
+      test-webapp "http://#{ip_prefix}.130:8080" # Should succeed (Internal traffic allowed)
+      test-webapp "http://#{ip_prefix}.130:8081" # Should success (Internal traffic allowed)
+      test-webapp "http://#{ip_prefix}.130:9090" # Should succeed (Internal traffic allowed)
+      test-webapp "http://#{ip_prefix}.130:9091" # Should success (Internal traffic allowed)
+
+      test-webapp ! "http://localhost:8080" # Service ports not accessible via localhost
+      test-webapp ! "http://localhost:8081" # Service ports not accessible via localhost
+      test-webapp ! "http://localhost:9090" # Service ports not accessible via localhost
+      test-webapp ! "http://localhost:9091" # Service ports not accessible via localhost
+
+      # Internal Communication Tests
+      # Get Container ID for test_service_a
+      service_a_container=$(docker ps --filter "name=test_service_a" -q | head -n 1)
+      
+      if [ -n "$service_a_container" ]; then
+         # Service A -> Service B (Port 80) - Should succeed
+         test-webapp --container "$service_a_container" "test_service_b" 80
+         # Service A -> Service B (Port 8080) - Should succeed (Internal traffic allowed)
+         test-webapp --container "$service_a_container" "test_service_b" 8080
+      else
+         echo "WARNING: Could not find running container for test_service_a on master node. Skipping internal tests."
+      fi
+
+      #{TEST_WEBAPP_RESULT}
     SHELL
   end
 
@@ -290,61 +459,7 @@ DOCKERFILE
 
     external.vm.provision "testing", preserve_order: true, type: 'shell', privileged: false, inline: <<-SHELL
         set -xuo pipefail
-        error_count=0
-        function test-webapp() {
-          local actual=""
-
-          if [[ "$#" -eq 2 ]]; then
-            local expect_fail='!'
-            url="$2"
-          else
-            url="$1"
-          fi
-
-          timeout 3 curl --silent "$url" || actual='!'
-
-          if [[ "${expect_fail:-}" = "${actual}" ]]; then
-            echo "OK: '$url' is ${expect_fail:+NOT }accessible${expect_fail:+ (should NOT be)}."
-          else
-            echo "FAIL: '$url' is ${expect_fail:+}${expect_fail:-NOT }accessible${expect_fail:-}."
-            (( ++ error_count ))
-            return 1
-          fi
-        } 2>/dev/null
-
-        function test-udp() {
-          local expect_fail="${1}"
-          if [[ "$expect_fail" == "!" ]]; then
-            shift
-          else
-            expect_fail=""
-          fi
-          local host="$1"
-          # Remove brackets for IPv6
-          host="${host#[}"
-          host="${host%]}"
-          local port="$2"
-          local payload="udp-test"
-          local response
-          
-          response=$(echo -n "$payload" | nc -u -w 1 "$host" "$port" 2>/dev/null || true)
-          
-          if [[ "$response" == "$payload" ]]; then
-            if [[ "$expect_fail" == "!" ]]; then
-              echo "FAIL: UDP $host:$port IS accessible (should NOT be)."
-              (( ++ error_count ))
-            else
-              echo "OK: UDP $host:$port is accessible."
-            fi
-          else
-            if [[ "$expect_fail" == "!" ]]; then
-              echo "OK: UDP $host:$port is NOT accessible."
-            else
-              echo "FAIL: UDP $host:$port is NOT accessible (expected '$payload', got '$response')."
-              (( ++ error_count ))
-            fi
-          fi
-        }
+        #{TEST_WEBAPP_SCRIPT}
 
         function run_tests() {
           local server="$1"
@@ -395,14 +510,8 @@ DOCKERFILE
           run_tests "http://[#{ip6_prefix}:0:cafe::130]"
           run_tests_ipv6 "http://[#{ip6_prefix}:0:cafe::130]"
         fi
-        {
-        echo "====================="
-        if [[ "$error_count" -eq 0 ]]; then echo "      TEST DONE      "
-        else echo "   TESTS FAIL: ${error_count}"
-        fi
-        echo "====================="
-        exit "${error_count}"
-        } 2>/dev/null
+
+        #{TEST_WEBAPP_RESULT}
     SHELL
   end
 end

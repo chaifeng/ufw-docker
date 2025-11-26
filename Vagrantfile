@@ -54,11 +54,20 @@ Vagrant.configure('2') do |config|
       # switch to legacy iptables
       update-alternatives --set iptables /usr/sbin/iptables-legacy
       update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
+      nft flush ruleset
     else
       echo "Using nf_tables"
       # switch to nf_tables
       update-alternatives --set iptables /usr/sbin/iptables-nft
       update-alternatives --set ip6tables /usr/sbin/ip6tables-nft
+      
+      # Flush legacy rules
+      for table in filter nat mangle raw; do
+        iptables-legacy -t $table -F || true
+        iptables-legacy -t $table -X || true
+        ip6tables-legacy -t $table -F || true
+        ip6tables-legacy -t $table -X || true
+      done
     fi
   SHELL
 
@@ -372,13 +381,13 @@ DOCKERFILE
     TEST_WEBAPP_RESULT = <<~SHELL
       {
         echo ""
-        echo "==============================================="
+        echo "========================================="
         if [[ "$error_count" -eq 0 ]]; then
-          echo "====     ✅ SUCCESS: All tests passed.     ===="
+          echo "====  ✅ SUCCESS: All tests passed.  ===="
         else 
-          echo "=== ❌ FAILURE: $error_count tests failed.  ==="
+          echo "====   ❌ FAILURE: $error_count tests failed.   ===="
         fi
-        echo "==============================================="
+        echo "========================================="
         echo ""
       } 8>/dev/null
       exit "$error_count"

@@ -132,7 +132,7 @@ Vagrant.configure('2') do |config|
     SHELL
 
     master.vm.provision "docker-registry", preserve_order: true, type: 'docker' do |d|
-      d.run "registry",
+      d.run "docker_registry",
             image: "registry:2",
             args: "-p 5000:5000",
             restart: "always",
@@ -200,53 +200,53 @@ DOCKERFILE
         set -xeuo pipefail
 
         # UDP Test Setup
-        if docker inspect udp-echo &>/dev/null; then docker rm -f udp-echo; fi
-        docker run -d --restart unless-stopped --name udp-echo \
+        if docker inspect udp_echo_test &>/dev/null; then docker rm -f udp_echo_test; fi
+        docker run -d --restart unless-stopped --name udp_echo_test \
             -p 30000:30000/udp #{private_registry}/chaifeng/hostname-webapp \
             sh -c 'socat UDP6-LISTEN:30000,fork EXEC:cat & socat UDP-LISTEN:30000,fork EXEC:cat & wait'
 
-        ufw-docker allow udp-echo 30000/udp
+        ufw-docker allow udp_echo_test 30000/udp
 
         # UDP Deny Test Setup
-        if docker inspect udp-deny &>/dev/null; then docker rm -f udp-deny; fi
-        docker run -d --restart unless-stopped --name udp-deny \
+        if docker inspect udp_deny_test &>/dev/null; then docker rm -f udp_deny_test; fi
+        docker run -d --restart unless-stopped --name udp_deny_test \
             -p 30001:30000/udp #{private_registry}/chaifeng/hostname-webapp \
             sh -c 'socat UDP6-LISTEN:30000,fork EXEC:cat & socat UDP-LISTEN:30000,fork EXEC:cat & wait'
 
         # Delete Rule Test Setup
-        if docker inspect deleted-webapp &>/dev/null; then docker rm -f deleted-webapp; fi
-        docker run -d --restart unless-stopped --name deleted-webapp \
-            -p 18081:80 --env name="deleted-webapp" #{private_registry}/chaifeng/hostname-webapp
+        if docker inspect deleted_webapp_test &>/dev/null; then docker rm -f deleted_webapp_test; fi
+        docker run -d --restart unless-stopped --name deleted_webapp_test \
+            -p 18081:80 --env name="deleted_webapp_test" #{private_registry}/chaifeng/hostname-webapp
 
-        ufw-docker allow deleted-webapp
-        ufw-docker delete allow deleted-webapp
+        ufw-docker allow deleted_webapp_test
+        ufw-docker delete allow deleted_webapp_test
     SHELL
 
     master.vm.provision "multiple-network", preserve_order: true, type: 'shell', inline: <<-SHELL
       set -xeuo pipefail
       declare -a docker_opts=()
 
-      if ! docker network ls | grep -F foo-internal; then
+      if ! docker network ls | grep -F foo_internal_network; then
           ! #{env_true_str?('ENABLE_DOCKER_IPV6')} || docker_opts=(--ipv6 --subnet fd05:8f23:c937:1::/64)
-          docker network create --internal "${docker_opts[@]}" foo-internal
+          docker network create --internal "${docker_opts[@]}" foo_internal_network
       fi
-      if ! docker network ls | grep -F bar-external; then
+      if ! docker network ls | grep -F bar_external_network; then
           ! #{env_true_str?('ENABLE_DOCKER_IPV6')} || docker_opts=(--ipv6 --subnet fd05:8f23:c937:2::/64)
-          docker network create "${docker_opts[@]}" bar-external
+          docker network create "${docker_opts[@]}" bar_external_network
       fi
 
-      for app in internal-multinet-app:7000 public-multinet-app:17070; do
+      for app in internal_multinet_app:7000 public_multinet_app:17070; do
           if ! docker inspect "${app%:*}" &>/dev/null; then
               docker run -d --restart unless-stopped --name "${app%:*}" \
                          -p "${app#*:}":80 --env name="${app}" \
-                         --network foo-internal \
+                         --network foo_internal_network \
                          192.168.56.130:5000/chaifeng/hostname-webapp
-              docker network connect bar-external "${app%:*}"
+              docker network connect bar_external_network "${app%:*}"
           fi
       done
 
-      ufw-docker allow public-multinet-app 80 bar-external
-      ufw-docker allow internal-multinet-app 80 foo-internal
+      ufw-docker allow public_multinet_app 80 bar_external_network
+      ufw-docker allow internal_multinet_app 80 foo_internal_network
     SHELL
 
     master.vm.provision "swarm-webapp", preserve_order: true, type: 'shell', inline: <<-SHELL
@@ -276,13 +276,13 @@ DOCKERFILE
         ufw-docker service allow public_multiport 8080/tcp
 
         # --- New Overlay Network Test Setup ---
-        if ! docker network ls | grep -F test-overlay; then
-            docker network create --driver overlay test-overlay
+        if ! docker network ls | grep -F test_overlay_network; then
+            docker network create --driver overlay test_overlay_network
         fi
 
         # Service A: 8080->80 (Allow), 8081->8080 (Block)
         if docker service inspect test_service_a &>/dev/null; then docker service rm test_service_a; fi
-        docker service create --name test_service_a --network test-overlay \
+        docker service create --name test_service_a --network test_overlay_network \
             --publish 8080:80 --publish 8081:8080 \
             --env name="test_service_a" --replicas 1 \
             #{private_registry}/chaifeng/hostname-webapp
@@ -292,7 +292,7 @@ DOCKERFILE
 
         # Service B: 9090->80 (Allow), 9091->8080 (Block)
         if docker service inspect test_service_b &>/dev/null; then docker service rm test_service_b; fi
-        docker service create --name test_service_b --network test-overlay \
+        docker service create --name test_service_b --network test_overlay_network \
             --publish 9090:80 --publish 9091:8080 \
             --env name="test_service_b" --replicas 1 \
             #{private_registry}/chaifeng/hostname-webapp
@@ -397,11 +397,11 @@ DOCKERFILE
       set -xeuo pipefail
       #{TEST_WEBAPP_SCRIPT}
 
-      test-webapp --container "internal-multinet-app" "http://public-multinet-app:80"
+      test-webapp --container "internal_multinet_app" "http://public_multinet_app:80"
 
       # get the ip address of public_webapp
       public_webapp_ip=$(docker inspect public_webapp | jq -r '.[0].NetworkSettings.Networks."bridge".IPAddress')
-      test-webapp ! --container "internal-multinet-app" "http://$public_webapp_ip:80" # Should fail (different networks)
+      test-webapp ! --container "internal_multinet_app" "http://$public_webapp_ip:80" # Should fail (different networks)
 
       # get the ip address of local_webapp
       local_webapp_ip=$(docker inspect local_webapp | jq -r '.[0].NetworkSettings.Networks."bridge".IPAddress')

@@ -274,10 +274,10 @@ DOCKERFILE
 
         ufw-docker service allow public_service 80/tcp
 
-        docker service inspect "public_multiport" ||
-            docker service create --name "public_multiport" "${docker_opts[@]}" \
-                --publish "40080:80" --publish "47000:7000" --publish "48080:8080" \
-                --env name="public_multiport" --replicas #{worker_count + 1} #{private_registry}/chaifeng/hostname-webapp
+        if docker service inspect "public_multiport" &>/dev/null; then docker service rm "public_multiport"; fi
+        docker service create --name "public_multiport" "${docker_opts[@]}" \
+            --publish "40080:80" --publish "47000:7000" --publish "48080:8080" \
+            --env name="public_multiport" --replicas #{worker_count + 1} #{private_registry}/chaifeng/hostname-webapp
 
         ufw-docker service allow public_multiport 80/tcp
         ufw-docker service allow public_multiport 8080/tcp

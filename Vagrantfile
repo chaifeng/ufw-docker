@@ -44,17 +44,23 @@ Vagrant.configure('2') do |config|
     env_true?(env_name).to_s
   end
 
-  config.vm.provision 'setup', preserve_order: true, type: 'shell', privileged: false, inline: <<-SHELL
+  config.vm.provision 'shell', preserve_order: true, run: 'once', privileged: false, inline: <<-SHELL
     byobu-ctrl-a screen
   SHELL
 
-  config.vm.provision 'setup-iptables', preserve_order: true, type: 'shell', privileged: true, inline: <<-SHELL
+  config.vm.provision 'shell', preserve_order: true, run: 'once', privileged: true, inline: <<-SHELL
+    [[ -f /etc/profile.d/editor.sh ]] || echo 'export EDITOR=vim' > /etc/profile.d/editor.sh
+
+    if [ -f /etc/ufw-docker-iptables-setup-done ]; then
+      exit 0
+    fi
+
     if #{env_true_str?('USE_IPTABLES_LEGACY')}; then
       echo "Using legacy iptables"
       # switch to legacy iptables
       update-alternatives --set iptables /usr/sbin/iptables-legacy
       update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
-      nft flush ruleset
+      nft flush ruleset || true
     else
       echo "Using nf_tables"
       # switch to nf_tables
@@ -69,11 +75,12 @@ Vagrant.configure('2') do |config|
         ip6tables-legacy -t $table -X || true
       done
     fi
+
+    touch /etc/ufw-docker-iptables-setup-done
   SHELL
 
-  config.vm.provision 'docker-daemon-config',  type: 'shell', inline: <<-SHELL
+  config.vm.provision 'docker-daemon-config', preserve_order: true, type: 'shell', inline: <<-SHELL
     set -eu
-    [[ -f /etc/profile.d/editor.sh ]] || echo 'export EDITOR=vim' > /etc/profile.d/editor.sh
     if [[ "$(hostname)" = @(master|node?) && ! -f /etc/docker/daemon.json ]]; then
       echo '{' >> /etc/docker/daemon.json
       echo '  "insecure-registries": ["localhost:5000", "#{ip_prefix}.130:5000"]' >> /etc/docker/daemon.json

@@ -8,7 +8,10 @@ for ENABLE_DOCKER_IPV6 in false true; do
       USE_IPTABLES_LEGACY="${USE_IPTABLES_LEGACY}"
       DOCKER_REGISTRY_MIRROR="${DOCKER_REGISTRY_MIRROR:-}"
       DISABLE_UNIT_TESTING="${DISABLE_UNIT_TESTING:-}"
+      SERVICE_REPLICAS="${SERVICE_REPLICAS:-}"
+      WORKER_COUNT="${WORKER_COUNT:-}"
     )
+    echo "vagrant destroy --force && env ${env_list[*]} vagrant up" >&2
     if ! (vagrant destroy --force && env "${env_list[@]}" vagrant up); then
       echo "Failed to run vagrant up with env: ${env_list[*]}"
       echo ""

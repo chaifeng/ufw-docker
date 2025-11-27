@@ -31,6 +31,7 @@ Vagrant.configure('2') do |config|
   ip_prefix="192.168.56"
   ip6_prefix="fd00:a:b"
   worker_count=2
+  service_replicas=1
 
   def env_true?(env_name)
     value = ENV[env_name] || 'false'
@@ -269,7 +270,7 @@ DOCKERFILE
             port="${name#*:}"
             if docker service inspect "$webapp" &>/dev/null; then docker service rm "$webapp"; fi
             docker service create --name "$webapp" "${docker_opts[@]}" \
-                --publish "${port}:80" --env name="$webapp" --replicas #{worker_count} #{private_registry}/chaifeng/hostname-webapp
+                --publish "${port}:80" --env name="$webapp" --replicas #{service_replicas} #{private_registry}/chaifeng/hostname-webapp
         done
 
         ufw-docker service allow public_service 80/tcp
@@ -277,7 +278,7 @@ DOCKERFILE
         if docker service inspect "public_multiport" &>/dev/null; then docker service rm "public_multiport"; fi
         docker service create --name "public_multiport" "${docker_opts[@]}" \
             --publish "40080:80" --publish "47000:7000" --publish "48080:8080" \
-            --env name="public_multiport" --replicas #{worker_count + 1} #{private_registry}/chaifeng/hostname-webapp
+            --env name="public_multiport" --replicas #{service_replicas} #{private_registry}/chaifeng/hostname-webapp
 
         ufw-docker service allow public_multiport 80/tcp
         ufw-docker service allow public_multiport 8080/tcp

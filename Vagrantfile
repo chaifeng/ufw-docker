@@ -402,6 +402,10 @@ DOCKERFILE
       # get the ip address of public_webapp
       public_webapp_ip=$(docker inspect public_webapp | jq -r '.[0].NetworkSettings.Networks."bridge".IPAddress')
       test-webapp ! --container "internal-multinet-app" "http://$public_webapp_ip:80" # Should fail (different networks)
+
+      # get the ip address of local_webapp
+      local_webapp_ip=$(docker inspect local_webapp | jq -r '.[0].NetworkSettings.Networks."bridge".IPAddress')
+      test-webapp --container "public_webapp" "http://$local_webapp_ip:80"
       
       # --- New Overlay Network Verification ---
       echo "=== Verifying Overlay Network Services ==="

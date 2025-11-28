@@ -19,8 +19,6 @@ after6_rules="/etc/ufw/after6.rules"
 bin_location="/usr/local/bin/ufw-docker"
 man_location="/usr/local/man/man8/ufw-docker.8"
 
-file_name="after.rules-ufw-docker~*-*-*-*~"
-file6_name="after6.rules-ufw-docker~*-*-*-*~"
 # UFW-DOCKER GLOBAL VARIABLES END #
 
 if [[ "${ufw_docker_agent_image}" = *-@(legacy|nf_tables) ]]; then
@@ -583,21 +581,6 @@ function ufw-docker--install() {
         else
             err "    sudo service ufw restart"
         fi
-    fi
-}
-
-function get_restore_file() {
-    local restore_file=$(ls -d $(dirname ${after_rules})/* | grep -e "$file_name" | sort | head -n1 || true)
-    echo $restore_file
-    if [ -z "${restore_file}" ]; then
-        return 1
-    fi
-}
-function get_restore6_file() {
-    local restore6_file=$(ls -d $(dirname ${after_rules})/* | grep -e "$file6_name" | sort | head -n1 || true)
-    echo $restore6_file
-    if [ -z "${restore6_file}" ]; then
-        return 1
     fi
 }
 

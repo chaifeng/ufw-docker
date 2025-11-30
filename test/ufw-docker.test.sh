@@ -1087,3 +1087,95 @@ test-list-docker-subnets-ipv6-manual-assert() {
     @stdout "2001:db8::/32"
     @stdout "fd00::/8"
 }
+
+test-reload-subcommand() {
+    ufw-docker reload
+}
+test-reload-subcommand-assert() {
+    ufw-docker--reload
+}
+
+mock-reload-rules() {
+    @allow-real sed -n 's/.*# allow //p'
+    @mock ufw-docker--list === @stdout \
+        "[ 3] 172.18.0.2 29090/tcp       ALLOW FWD   Anywhere                   # allow yykjc6r8plexe1oua1iwc1gm8 29090/tcp" \
+        "[ 4] 172.18.0.2 40080/tcp       ALLOW FWD   Anywhere                   # allow i9he13jtd78butwzldzbdxz6f 40080/tcp" \
+        "[ 5] 172.18.0.2 48080/tcp       ALLOW FWD   Anywhere                   # allow i9he13jtd78butwzldzbdxz6f 48080/tcp" \
+        "[ 6] 172.18.0.2 8080/tcp        ALLOW FWD   Anywhere                   # allow b3l5tr2ki1weur4k2pon8qzhv 8080/tcp" \
+        "[ 7] 172.18.0.2 9090/tcp        ALLOW FWD   Anywhere                   # allow 328njm00scpkcwig1nym9ktrt 9090/tcp" \
+        "[ 8] 172.17.0.6 80/tcp          ALLOW FWD   Anywhere                   # allow public_webapp 80/tcp bridge" \
+        "[ 9] 172.17.0.5 30000/udp       ALLOW FWD   Anywhere                   # allow udp_echo_test 30000/udp bridge" \
+        "[10] 172.20.0.2 80/tcp          ALLOW FWD   Anywhere                   # allow public_multinet_app 80/tcp bar_external_network" \
+        "[11] 172.19.0.2 80/tcp          ALLOW FWD   Anywhere                   # allow internal_multinet_app 80/tcp foo_internal_network"
+
+    @mock docker ps --filter "name=${ufw_docker_agent}" -q === @stdout "1234567890ab"
+}
+test-reload-rules-without-agent() {
+    mock-reload-rules
+    @mock docker ps --filter "name=${ufw_docker_agent}" -q === @stdout ""
+
+    load-ufw-docker-function ufw-docker--reload
+    ufw-docker--reload
+}
+test-reload-rules-without-agent-assert() {
+    ufw-docker--allow yykjc6r8plexe1oua1iwc1gm8 29090 tcp ""
+    ufw-docker--allow i9he13jtd78butwzldzbdxz6f 40080 tcp ""
+    ufw-docker--allow i9he13jtd78butwzldzbdxz6f 48080 tcp ""
+    ufw-docker--allow b3l5tr2ki1weur4k2pon8qzhv 8080 tcp ""
+    ufw-docker--allow 328njm00scpkcwig1nym9ktrt 9090 tcp ""
+    ufw-docker--allow public_webapp 80 tcp bridge
+    ufw-docker--allow udp_echo_test 30000 udp bridge
+    ufw-docker--allow public_multinet_app 80 tcp bar_external_network
+    ufw-docker--allow internal_multinet_app 80 tcp foo_internal_network
+}
+
+test-reload-rules-but-failed-to-recreate-agent() {
+    mock-reload-rules
+    @mock docker ps --filter "name=${ufw_docker_agent}" -q === @stdout "1234567890ab"
+    @mockfalse docker rm -f "1234567890ab"
+
+    load-ufw-docker-function ufw-docker--reload
+    ufw-docker--reload
+}
+test-reload-rules-but-failed-to-recreate-agent-assert() {
+    test-reload-rules-without-agent-assert
+    for ((i=0; i<10; i++)); do sleep 3; done
+    @fail
+}
+
+test-reload-rules() {
+    mock-reload-rules
+
+    load-ufw-docker-function ufw-docker--reload
+    ufw-docker--reload
+}
+test-reload-rules-assert() {
+    test-reload-rules-without-agent-assert
+
+    docker rm -f "1234567890ab"
+}
+
+test-reload-unexisting-rules() {
+    mock-reload-rules
+    @mockfalse ufw-docker--allow i9he13jtd78butwzldzbdxz6f 40080 tcp ""
+    @mockfalse ufw-docker--allow i9he13jtd78butwzldzbdxz6f 48080 tcp ""
+    @mockfalse ufw-docker--allow b3l5tr2ki1weur4k2pon8qzhv 8080 tcp ""
+
+    load-ufw-docker-function ufw-docker--reload
+    ufw-docker--reload
+}
+test-reload-unexisting-rules-assert() {
+    ufw-docker--allow yykjc6r8plexe1oua1iwc1gm8 29090 tcp ""
+
+    ufw-docker--delete i9he13jtd78butwzldzbdxz6f 40080 tcp ""
+    ufw-docker--delete i9he13jtd78butwzldzbdxz6f 48080 tcp ""
+    ufw-docker--delete b3l5tr2ki1weur4k2pon8qzhv 8080 tcp ""
+
+    ufw-docker--allow 328njm00scpkcwig1nym9ktrt 9090 tcp ""
+    ufw-docker--allow public_webapp 80 tcp bridge
+    ufw-docker--allow udp_echo_test 30000 udp bridge
+    ufw-docker--allow public_multinet_app 80 tcp bar_external_network
+    ufw-docker--allow internal_multinet_app 80 tcp foo_internal_network
+
+    docker rm -f "1234567890ab"
+}

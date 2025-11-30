@@ -349,6 +349,10 @@ Update UFW configurations, add the necessary firewall rules
 
     ufw-docker install
 
+Reload all firewall rules, useful when container IPs change after a restart
+
+    ufw-docker reload
+
 Restore UFW configuration, delete all installed files
 
     ufw-docker uninstall
@@ -777,6 +781,10 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 更新 UFW 的配置文件，添加必要的防火墙规则
 
     ufw-docker install
+
+重载所有防火墙规则，当重启容器后 IP 改变时非常有用
+
+    ufw-docker reload
 
 显示当前防火墙允许的转发规则
 

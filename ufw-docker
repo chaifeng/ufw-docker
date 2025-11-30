@@ -531,6 +531,56 @@ function ufw-docker--check-install_ipv6() {
     diff -u --color=auto "$after6_rules" "$after6_rules_tmp"
 }
 
+function ufw-docker--reload() {
+    local ufw_output
+    ufw_output="$(ufw-docker--list || true)"
+
+    [[ -z "$ufw_output" ]] && return 0
+
+    local comments
+    comments=$(sed -n 's/.*# allow //p' <<< "$ufw_output")
+
+    declare -A commands_map
+
+    while read -r line; do
+        [[ -z "$line" ]] && continue
+
+        read -r -a tokens <<< "$line"
+
+        local instance_name="${tokens[0]%/v6}"
+        local port=""
+        local proto=""
+        local network=""
+
+        for ((i=1; i<${#tokens[@]}; i++)); do
+            local token="${tokens[i]}"
+            if [[ "$token" =~ ^[0-9]+/(tcp|udp)$ ]]; then
+                port="${token%/*}"
+                proto="${token#*/}"
+            else
+                network="$token"
+            fi
+        done
+
+        local key="${instance_name}|${port}|${proto}|${network}"
+        echo "Reloading rule for $instance_name ${port}/${proto} $network" >&2
+        if ! (ufw-docker--allow "$instance_name" "$port" "$proto" "$network"); then
+            echo "Delete unexisting rule for $instance_name ${port}/${proto} $network" >&2
+            ufw-docker--delete "$instance_name" "$port" "$proto" "$network"
+        fi
+    done <<< "$comments"
+    local max_retries=10
+    echo "Waiting for ufw-docker agent to be recreated..." >&2
+    until docker ps --filter "name=$ufw_docker_agent" -q | xargs --no-run-if-empty -- docker rm -f; do
+        if ! ((max_retries--)); then
+            echo "Failed to recreate ufw-docker-agent service." >&2
+            exit 1
+        fi
+        echo "Waiting for ufw-docker agent to be recreated..." >&2
+        sleep 3
+    done
+}
+
 function ufw-docker--install() {
     local changed=false
 
@@ -655,7 +705,7 @@ function ufw-docker--help() {
 
 	  ufw-docker <install|check> [--docker-subnets [SUBNET0 SUBNET1 ...]] [--system]
 
-	  ufw-docker <status|install|uninstall|check|man[page]|help>
+	  ufw-docker <status|install|uninstall|check|reload|man[page]|help>
 
 	Examples:
 	  ufw-docker help
@@ -739,6 +789,10 @@ function man-page() {
 	.TP
 	.B check \fR[--help] [--docker-subnets [\fIsubnet\fR ...]] [--system]
 	Same as \fBinstall\fR, but shows the changes instead of appling them.
+
+	.TP
+	.B reload
+	Reloads all firewall rules. This is useful when container IPs change after a restart.
 
 	.TP
 	.B help
@@ -959,6 +1013,9 @@ case "$ufw_action" in
         ;;
     uninstall)
         ufw-docker--uninstall "$@"
+        ;;
+    reload)
+        ufw-docker--reload
         ;;
     status)
         ufw-docker--"$ufw_action"

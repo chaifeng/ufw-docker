@@ -939,7 +939,7 @@ test-install-command-with-system-assert() {
     @assert-capture tee /usr/local/man/man8/ufw-docker.8 <<< "MAN PAGE FOR UFW-DOCKER"
 
 	mandb -q
-    ufw-docker--install-service
+    ufw-docker--install-service --force
 }
 
 test-check-command-with-system() {
@@ -1007,6 +1007,19 @@ test-install-service-file-exists() {
 }
 test-install-service-file-exists-assert() {
     @do-nothing
+}
+
+test-install-service-file-exists-force() {
+    @mocktrue command -v systemctl
+    @mockfalse [ ! -f /etc/systemd/system/ufw-docker.service ]
+    @capture tee /etc/systemd/system/ufw-docker.service
+
+    load-ufw-docker-function ufw-docker--install-service
+
+    ufw_docker_bin=/usr/local/bin/ufw-docker ufw-docker--install-service --force
+}
+test-install-service-file-exists-force-assert() {
+    test-install-service-assert
 }
 
 setup-ufw-docker--uninstall() {

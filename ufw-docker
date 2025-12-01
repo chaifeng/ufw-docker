@@ -623,7 +623,7 @@ function ufw-docker--install() {
         man-page | tee "${man_location}" >/dev/null
         mandb -q
 
-        ufw_docker_bin="$bin_location" ufw-docker--install-service
+        ufw_docker_bin="$bin_location" ufw-docker--install-service --force
     fi
 
     if "$changed"; then
@@ -641,8 +641,14 @@ function ufw-docker--install-service() {
         err "Only systemd is supported for service installation."
         return 1
     fi
+    local force=false
+    for arg in "$@"; do
+        if [[ "$arg" == "--force" ]]; then
+            force=true
+        fi
+    done
     local ufw_docker_bin="${ufw_docker_bin:-$(realpath "$0")}"
-    if [ ! -f "$ufw_docker_service_file" ]; then
+    if [ ! -f "$ufw_docker_service_file" ] || "$force"; then
         err "\nInstalling ufw-docker service..."
         err "--"
         tee "$ufw_docker_service_file" <<EOF
@@ -752,8 +758,9 @@ function ufw-docker--help() {
 	  ufw-docker service delete allow <swarm-service-id-or-name>
 
 	  ufw-docker <install|check> [--docker-subnets [SUBNET0 SUBNET1 ...]] [--system]
+	  ufw-docker install-service [--force]
 
-	  ufw-docker <status|install|uninstall|check|reload|man[page]|help>
+	  ufw-docker <status|install|install-service|uninstall|check|reload|man[page]|help>
 
 	Examples:
 	  ufw-docker help
@@ -769,6 +776,9 @@ function ufw-docker--help() {
 	  ufw-docker install --docker-subnets     # Auto-detect and use all Docker network subnets
 	  ufw-docker install --docker-subnets 192.168.207.0/24 10.207.0.0/16 fd00:cf::/64
 	  ufw-docker install --docker-subnets 192.168.207.0/24 10.207.0.0/16 fd00:cf::/64 
+
+	  ufw-docker install-service              # Install the ufw-docker service
+	  ufw-docker install-service --force      # Install the ufw-docker service, overwriting the existing service file
 
 	  ufw-docker status
 
@@ -786,6 +796,8 @@ function ufw-docker--help() {
 	  ufw-docker service allow httpd 80/tcp
 
 	  ufw-docker service delete allow httpd
+
+	  ufw-docker reload                       # Reload all firewall rules
 	EOF
 }
 
@@ -806,7 +818,7 @@ function man-page() {
 	install|check [--help] [--docker-subnets [\fIsubnet\fR ...]] [--system]
 	.br
 	.B ufw-docker
-	install-service
+	install-service [--force]
 	.br
 	.B ufw-docker
 	allow|deny|list
@@ -834,8 +846,8 @@ function man-page() {
 	Using --help shows more explanatory text and exits.
 
 	.TP
-	.B install-service
-	Install the ufw-docker service.
+	.B install-service \fR[--force]
+	Install the ufw-docker service. Use --force to overwrite the existing service file.
 
 	.TP
 	.B uninstall

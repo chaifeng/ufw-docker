@@ -353,6 +353,9 @@ Install the ufw-docker systemd service to automatically reload rules (only suppo
 
     ufw-docker install-service
 
+    # Use --force to overwrite the existing service file
+    ufw-docker install-service --force
+
 Reload all firewall rules, useful when container IPs change after a restart
 
     ufw-docker reload
@@ -789,6 +792,9 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 安装 ufw-docker systemd 服务，用于自动重载规则（仅支持 systemd）
 
     ufw-docker install-service
+
+    # 使用 --force 选项来覆盖已存在的服务文件
+    ufw-docker install-service --force
 
 重载所有防火墙规则，当重启容器后 IP 改变时非常有用
 

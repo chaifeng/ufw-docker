@@ -27,7 +27,6 @@ for ENABLE_DOCKER_IPV6 in true false; do
       sleep 10
       vagrant provision external
       reload_tested=true
-      exit
     fi
   done
 done

@@ -30,8 +30,14 @@ Vagrant.configure('2') do |config|
 
   ip_prefix="192.168.56"
   ip6_prefix="fd00:a:b"
+
+  # worker_count range: 0 to 3
   worker_count = ENV['WORKER_COUNT'] ? ENV['WORKER_COUNT'].to_i : 2
+  worker_count = [[worker_count, 0].max, 3].min
+
+  # service_replicas range: 1 to worker_count + 3
   service_replicas = ENV['SERVICE_REPLICAS'] ? ENV['SERVICE_REPLICAS'].to_i : 1
+  service_replicas = [[service_replicas, 1].max, worker_count + 3].min
 
   def env_true?(env_name)
     value = ENV[env_name] || 'false'

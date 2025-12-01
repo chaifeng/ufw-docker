@@ -18,6 +18,7 @@ after6_rules="/etc/ufw/after6.rules"
 
 bin_location="/usr/local/bin/ufw-docker"
 man_location="/usr/local/man/man8/ufw-docker.8"
+ufw_docker_service_file="/etc/systemd/system/ufw-docker.service"
 
 # UFW-DOCKER GLOBAL VARIABLES END #
 
@@ -583,9 +584,8 @@ function ufw-docker--reload() {
 
 function ufw-docker--install() {
     local changed=false
-
-    # test $@ for the '--system' flag
     local system_flag=false
+    local -a new_args=()
     for arg in "$@"; do
         if [[ "$arg" == "--system" ]]; then
             system_flag=true
@@ -616,12 +616,14 @@ function ufw-docker--install() {
     if "$system_flag"; then
         err "\\nInstalling 'ufw-docker' to '${bin_location}'"
         mkdir -p "$(dirname "${bin_location}")"
-		    cp -- "$0" "${bin_location}"
+		cp -- "$0" "${bin_location}"
 
         err "\\nInstalling man page to '${man_location}'"
         mkdir -p "$(dirname "${man_location}")"
         man-page | tee "${man_location}" >/dev/null
         mandb -q
+
+        ufw_docker_bin="$bin_location" ufw-docker--install-service
     fi
 
     if "$changed"; then
@@ -631,6 +633,43 @@ function ufw-docker--install() {
         else
             err "    sudo service ufw restart"
         fi
+    fi
+}
+
+function ufw-docker--install-service() {
+    if ! command -v systemctl &>/dev/null; then
+        err "Only systemd is supported for service installation."
+        return 1
+    fi
+    local ufw_docker_bin="${ufw_docker_bin:-$(realpath "$0")}"
+    if [ ! -f "$ufw_docker_service_file" ]; then
+        err "\nInstalling ufw-docker service..."
+        err "--"
+        tee "$ufw_docker_service_file" <<EOF
+[Unit]
+Description=UFW Docker Firewall Rules
+After=docker.service
+Requires=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=${ufw_docker_bin} reload
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+        err "--"
+        chmod 644 "$ufw_docker_service_file"
+        err "Service file created at $ufw_docker_service_file"
+        systemctl daemon-reload
+        err "Service daemon reloaded."
+        systemctl enable --now ufw-docker
+        err "Service enabled and started."
+        err "Service installed successfully."
+    else
+        err "Service already installed."
     fi
 }
 
@@ -656,6 +695,15 @@ function ufw-docker--uninstall() {
 
     if [ -f "$bin_location" ]; then rm -v "$bin_location"; fi
     if [ -f "$man_location" ]; then rm -v "$man_location"; fi
+
+    if [ -f "$ufw_docker_service_file" ]; then
+        err "\nUninstalling ufw-docker service..."
+        ! systemctl is-active --quiet ufw-docker || systemctl stop ufw-docker
+        ! systemctl is-enabled --quiet ufw-docker || systemctl disable ufw-docker
+        rm -v "$ufw_docker_service_file"
+        systemctl daemon-reload
+        err "Service uninstalled successfully."
+    fi
 
     if "$changed"; then
         err "\\nPlease restart UFW service manually by using the following command:"
@@ -758,6 +806,9 @@ function man-page() {
 	install|check [--help] [--docker-subnets [\fIsubnet\fR ...]] [--system]
 	.br
 	.B ufw-docker
+	install-service
+	.br
+	.B ufw-docker
 	allow|deny|list
 	\fIcontainer\fR [\fIport\fR[/tcp|/udp]] [\fInetwork\fR]
 	.br
@@ -781,6 +832,10 @@ function man-page() {
 	This option applies to both IPv4 and IPv6 networks.
 
 	Using --help shows more explanatory text and exits.
+
+	.TP
+	.B install-service
+	Install the ufw-docker service.
 
 	.TP
 	.B uninstall
@@ -843,6 +898,12 @@ function man-page() {
 	.TP
 	.PP
 	Auto-detect and use all Docker network subnets (both IPv4 and IPv6).
+
+	.TP
+	.B ufw-docker install-service
+	.TP
+	.PP
+	Install the ufw-docker service.
 
 	.TP
 	.B ufw-docker list httpd
@@ -999,7 +1060,7 @@ case "$ufw_action" in
     allow)
         "ufw-docker--$ufw_action" "$INSTANCE_NAME" "$INSTANCE_PORT" "$PROTO" "$NETWORK"
         ;;
-    service|raw-command|add-service-rule)
+    service|raw-command|add-service-rule|install-service)
         shift || true
         "ufw-docker--$ufw_action" "$@"
         ;;

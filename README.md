@@ -349,6 +349,10 @@ Update UFW configurations, add the necessary firewall rules
 
     ufw-docker install
 
+Install the ufw-docker systemd service to automatically reload rules (only supports systemd)
+
+    ufw-docker install-service
+
 Reload all firewall rules, useful when container IPs change after a restart
 
     ufw-docker reload
@@ -781,6 +785,10 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 更新 UFW 的配置文件，添加必要的防火墙规则
 
     ufw-docker install
+
+安装 ufw-docker systemd 服务，用于自动重载规则（仅支持 systemd）
+
+    ufw-docker install-service
 
 重载所有防火墙规则，当重启容器后 IP 改变时非常有用
 

@@ -153,6 +153,14 @@ test-check-command-with-docker-subnets-assert() {
 }
 
 
+test-install-service-command() {
+    ufw-docker install-service
+}
+test-install-service-command-assert() {
+    ufw-docker--install-service
+}
+
+
 test-service-command() {
     ufw-docker service allow httpd
 }
@@ -913,38 +921,92 @@ test-man-command-assert() {
 }
 
 test-install-command-with-system() {
-	@mock ufw-docker--check-install === @true
-	@mock ufw-docker--check-install_ipv6 === @true
-  @allow-real dirname /usr/local/bin/ufw-docker
-  @allow-real dirname /usr/local/man/man8/ufw-docker.8
-  @capture tee /usr/local/man/man8/ufw-docker.8
+    @mocktrue ufw-docker--check-install
+    @mocktrue ufw-docker--check-install_ipv6
+    @allow-real dirname /usr/local/bin/ufw-docker
+    @allow-real dirname /usr/local/man/man8/ufw-docker.8
+    @capture tee /usr/local/man/man8/ufw-docker.8
 
 	load-ufw-docker-function ufw-docker--install
 
 	ufw-docker--install --system
 }
 test-install-command-with-system-assert() {
-  mkdir -p /usr/local/bin
-  cp -- test/ufw-docker.test.sh /usr/local/bin/ufw-docker
+    mkdir -p /usr/local/bin
+    cp -- test/ufw-docker.test.sh /usr/local/bin/ufw-docker
 
-  mkdir -p /usr/local/man/man8
-  @assert-capture tee /usr/local/man/man8/ufw-docker.8 <<< "MAN PAGE FOR UFW-DOCKER"
+    mkdir -p /usr/local/man/man8
+    @assert-capture tee /usr/local/man/man8/ufw-docker.8 <<< "MAN PAGE FOR UFW-DOCKER"
 
 	mandb -q
+    ufw-docker--install-service
 }
 
 test-check-command-with-system() {
-	@mockfalse command -v ip6tables
-  @mock err "Installing man page to '/usr/local/man/man8/ufw-docker.8'"
+    @mockfalse command -v ip6tables
+    @mock err "Installing man page to '/usr/local/man/man8/ufw-docker.8'"
 
 	load-ufw-docker-function ufw-docker--check
 
 	ufw-docker--check --system
 }
 test-check-command-with-system-assert() {
-	iptables -n -L DOCKER-USER
-	ufw-docker--check-install
-  err "Installing man page to '/usr/local/man/man8/ufw-docker.8'"
+    iptables -n -L DOCKER-USER
+    ufw-docker--check-install
+    err "Installing man page to '/usr/local/man/man8/ufw-docker.8'"
+}
+
+test-install-service() {
+    @mocktrue command -v systemctl
+    @mocktrue [ ! -f /etc/systemd/system/ufw-docker.service ]
+    @capture tee /etc/systemd/system/ufw-docker.service
+
+    load-ufw-docker-function ufw-docker--install-service
+
+    ufw_docker_bin=/usr/local/bin/ufw-docker ufw-docker--install-service
+}
+test-install-service-assert() {
+    @assert-capture tee /etc/systemd/system/ufw-docker.service <<\EOF
+[Unit]
+Description=UFW Docker Firewall Rules
+After=docker.service
+Requires=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/ufw-docker reload
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    chmod 644 /etc/systemd/system/ufw-docker.service
+    systemctl daemon-reload
+    systemctl enable --now ufw-docker
+}
+
+test-install-service-missing-systemctl() {
+    @mockfalse command -v systemctl
+
+    load-ufw-docker-function ufw-docker--install-service
+
+    ufw_docker_bin=/usr/local/bin/ufw-docker ufw-docker--install-service
+}
+test-install-service-missing-systemctl-assert() {
+    @fail
+}
+
+test-install-service-file-exists() {
+    @mocktrue command -v systemctl
+    @mockfalse [ ! -f /etc/systemd/system/ufw-docker.service ]
+
+    load-ufw-docker-function ufw-docker--install-service
+
+    ufw_docker_bin=/usr/local/bin/ufw-docker ufw-docker--install-service
+}
+test-install-service-file-exists-assert() {
+    @do-nothing
 }
 
 setup-ufw-docker--uninstall() {
@@ -957,6 +1019,9 @@ setup-ufw-docker--uninstall() {
 
     @mocktrue [ -f /usr/local/bin/ufw-docker ]
     @mocktrue [ -f /usr/local/man/man8/ufw-docker.8 ]
+    @mocktrue [ -f /etc/systemd/system/ufw-docker.service ]
+    @mocktrue systemctl is-active --quiet ufw-docker
+    @mocktrue systemctl is-enabled --quiet ufw-docker
 
     @mocktrue type systemctl
 }
@@ -980,6 +1045,11 @@ test-ufw-docker--uninstall-assert() {
 
     rm -v /usr/local/bin/ufw-docker
     rm -v /usr/local/man/man8/ufw-docker.8
+
+    systemctl stop ufw-docker
+    systemctl disable ufw-docker
+    rm -v /etc/systemd/system/ufw-docker.service
+    systemctl daemon-reload
 }
 
 test-ufw-docker--uninstall-missing-rules() {
@@ -997,6 +1067,11 @@ test-ufw-docker--uninstall-missing-rules-assert() {
 
     rm -v /usr/local/bin/ufw-docker
     rm -v /usr/local/man/man8/ufw-docker.8
+
+    systemctl stop ufw-docker
+    systemctl disable ufw-docker
+    rm -v /etc/systemd/system/ufw-docker.service
+    systemctl daemon-reload
 }
 
 test-ufw-docker--uninstall-no-service() {
@@ -1019,6 +1094,11 @@ test-ufw-docker--uninstall-no-service-assert() {
     # Expect no docker service rm call
     rm -v /usr/local/bin/ufw-docker
     rm -v /usr/local/man/man8/ufw-docker.8
+
+    systemctl stop ufw-docker
+    systemctl disable ufw-docker
+    rm -v /etc/systemd/system/ufw-docker.service
+    systemctl daemon-reload
 }
 
 test-ufw-docker--uninstall-missing-files() {
@@ -1031,6 +1111,64 @@ test-ufw-docker--uninstall-missing-files() {
     ufw-docker--uninstall
 }
 test-ufw-docker--uninstall-missing-files-assert() {
+    cp -v /etc/ufw/after.rules /etc/ufw/after.rules~2009-02-14-0731
+    sed -i -e '/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d' /etc/ufw/after.rules
+    diff /etc/ufw/after.rules~2009-02-14-0731 /etc/ufw/after.rules
+
+    cp -v /etc/ufw/after6.rules /etc/ufw/after6.rules~2009-02-14-0731
+    sed -i -e '/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d' /etc/ufw/after6.rules
+    diff /etc/ufw/after6.rules~2009-02-14-0731 /etc/ufw/after6.rules
+
+    docker service rm ufw-docker-agent
+
+    # Expect no rm calls for missing files
+
+    systemctl stop ufw-docker
+    systemctl disable ufw-docker
+    rm -v /etc/systemd/system/ufw-docker.service
+    systemctl daemon-reload
+}
+
+test-ufw-docker--uninstall-missing-service() {
+    setup-ufw-docker--uninstall
+    @mockfalse [ -f /usr/local/bin/ufw-docker ]   # Binary missing
+    @mockfalse [ -f /usr/local/man/man8/ufw-docker.8 ] # Man page missing
+    @mockfalse systemctl is-active --quiet ufw-docker
+    @mockfalse systemctl is-enabled --quiet ufw-docker
+
+    load-ufw-docker-function ufw-docker--uninstall
+
+    ufw-docker--uninstall
+}
+test-ufw-docker--uninstall-missing-service-assert() {
+    cp -v /etc/ufw/after.rules /etc/ufw/after.rules~2009-02-14-0731
+    sed -i -e '/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d' /etc/ufw/after.rules
+    diff /etc/ufw/after.rules~2009-02-14-0731 /etc/ufw/after.rules
+
+    cp -v /etc/ufw/after6.rules /etc/ufw/after6.rules~2009-02-14-0731
+    sed -i -e '/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d' /etc/ufw/after6.rules
+    diff /etc/ufw/after6.rules~2009-02-14-0731 /etc/ufw/after6.rules
+
+    docker service rm ufw-docker-agent
+
+    # Expect no rm calls for missing files
+
+    rm -v /etc/systemd/system/ufw-docker.service
+    systemctl daemon-reload
+}
+
+
+test-ufw-docker--uninstall-missing-service-file() {
+    setup-ufw-docker--uninstall
+    @mockfalse [ -f /usr/local/bin/ufw-docker ]   # Binary missing
+    @mockfalse [ -f /usr/local/man/man8/ufw-docker.8 ] # Man page missing
+    @mockfalse [ -f /etc/systemd/system/ufw-docker.service ] # Service file missing
+
+    load-ufw-docker-function ufw-docker--uninstall
+
+    ufw-docker--uninstall
+}
+test-ufw-docker--uninstall-missing-service-file-assert() {
     cp -v /etc/ufw/after.rules /etc/ufw/after.rules~2009-02-14-0731
     sed -i -e '/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d' /etc/ufw/after.rules
     diff /etc/ufw/after.rules~2009-02-14-0731 /etc/ufw/after.rules

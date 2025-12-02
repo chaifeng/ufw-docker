@@ -800,6 +800,10 @@ UFW 是 Ubuntu 上很流行的一个 iptables 前端，可以非常方便的管�
 
     ufw-docker reload
 
+恢复 UFW 配置，删除所有安装的文件
+
+    ufw-docker uninstall
+
 显示当前防火墙允许的转发规则
 
     ufw-docker status

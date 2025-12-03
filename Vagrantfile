@@ -180,18 +180,35 @@ Vagrant.configure('2') do |config|
     master.vm.provision "build-webapp", preserve_order: true, type: 'shell', privileged: false, inline: <<-SHELL
         set -xeuo pipefail
         docker build -t #{private_registry}/chaifeng/hostname-webapp - <<\\DOCKERFILE
-FROM httpd:alpine
+FROM python:3-alpine
 
 RUN apk add --no-cache socat curl
-RUN printf "Listen %s\\n" 7000 8080 >> /usr/local/apache2/conf/httpd.conf
 
-RUN { echo '#!/bin/sh'; \\
-    echo 'set -e; (echo -n "${name:-Hi} "; hostname;) > /usr/local/apache2/htdocs/index.html'; \\
-    echo 'exec "$@"'; \\
-    } > /entrypoint.sh; chmod +x /entrypoint.sh
+RUN echo 'import http.server, socketserver, threading, os, sys, time' > /server.py && \
+    echo 'class Handler(http.server.BaseHTTPRequestHandler):' >> /server.py && \
+    echo '    def do_GET(self):' >> /server.py && \
+    echo '        self.send_response(200)' >> /server.py && \
+    echo '        self.send_header("Content-type", "text/plain")' >> /server.py && \
+    echo '        self.end_headers()' >> /server.py && \
+    echo '        name = os.environ.get("name", "Hi")' >> /server.py && \
+    echo '        hostname = os.uname().nodename' >> /server.py && \
+    echo '        client_ip = self.client_address[0]' >> /server.py && \
+    echo '        response = f"{name} {hostname} {client_ip}\\n"' >> /server.py && \
+    echo '        try: self.wfile.write(response.encode("utf-8"))' >> /server.py && \
+    echo '        except BrokenPipeError: pass' >> /server.py && \
+    echo '    def log_message(self, format, *args): pass' >> /server.py && \
+    echo 'def serve(port):' >> /server.py && \
+    echo '    socketserver.TCPServer.allow_reuse_address = True' >> /server.py && \
+    echo '    try:' >> /server.py && \
+    echo '        with socketserver.TCPServer(("", port), Handler) as httpd:' >> /server.py && \
+    echo '            httpd.serve_forever()' >> /server.py && \
+    echo '    except Exception as e: print(e)' >> /server.py && \
+    echo 'ports = [80, 7000, 8080]' >> /server.py && \
+    echo 'for port in ports:' >> /server.py && \
+    echo '    threading.Thread(target=serve, args=(port,), daemon=True).start()' >> /server.py && \
+    echo 'while True: time.sleep(3600)' >> /server.py
 
-ENTRYPOINT ["/entrypoint.sh"]
-CMD ["httpd-foreground"]
+CMD ["python3", "-u", "/server.py"]
 DOCKERFILE
         docker push #{private_registry}/chaifeng/hostname-webapp
     SHELL

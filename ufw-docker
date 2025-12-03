@@ -441,7 +441,7 @@ function ufw-docker--check-install() {
 
     sed "/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d" "$after_rules" | tee "$after_rules_tmp" >/dev/null
     {
-        cat <<-\EOF
+        cat <<-'EOF'
 	# BEGIN UFW AND DOCKER
 	*filter
 	:ufw-user-forward - [0:0]
@@ -463,7 +463,7 @@ function ufw-docker--check-install() {
 	          echo "-A DOCKER-USER -j ufw-docker-logging-deny -m conntrack --ctstate NEW -d ${cidr}"
         done
 
-        cat <<-\EOF
+        cat <<-'EOF'
 
 	-A DOCKER-USER -j RETURN
 
@@ -496,7 +496,7 @@ function ufw-docker--check-install_ipv6() {
 
     sed "/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d" "$after6_rules" | tee "$after6_rules_tmp" >/dev/null
     {
-        cat <<-\EOF
+        cat <<-'EOF'
 	# BEGIN UFW AND DOCKER
 	*filter
 	:ufw6-user-forward - [0:0]
@@ -518,7 +518,7 @@ function ufw-docker--check-install_ipv6() {
 	          echo "-A DOCKER-USER -j ufw6-docker-logging-deny -m conntrack --ctstate NEW -d ${cidr}"
         done
 
-        cat <<-\EOF
+        cat <<-'EOF'
 
 	-A DOCKER-USER -j RETURN
 

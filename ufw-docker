@@ -12,6 +12,7 @@ ENV_VALUE_SPLITTER=','
 
 ufw_docker_agent=ufw-docker-agent
 ufw_docker_agent_image="${UFW_DOCKER_AGENT_IMAGE:-chaifeng/${ufw_docker_agent}:251123-nf_tables}"
+ufw_docker_agent_image_probe_error=''
 
 after_rules="/etc/ufw/after.rules"
 after6_rules="/etc/ufw/after6.rules"
@@ -21,16 +22,6 @@ man_location="/usr/local/man/man8/ufw-docker.8"
 ufw_docker_service_file="/etc/systemd/system/ufw-docker.service"
 
 # UFW-DOCKER GLOBAL VARIABLES END #
-
-if [[ "${ufw_docker_agent_image}" = *-@(legacy|nf_tables) ]]; then
-    if iptables --version | grep -F '(legacy)' &>/dev/null; then
-        ufw_docker_agent_image="${ufw_docker_agent_image%-*}-legacy"
-    else
-        ufw_docker_agent_image="${ufw_docker_agent_image%-*}-nf_tables"
-    fi
-fi
-
-test -n "$ufw_docker_agent_image"
 
 function ufw-docker--status() {
     ufw-docker--list
@@ -250,6 +241,11 @@ function ufw-docker--service-allow() {
 
     [[ -z "${env_value:-}" ]] && die "Service $service_name does not publish port $service_port."
 
+    if [[ "${ufw_docker_agent_image}" = *-@(legacy|nf_tables) ]]; then
+        ufw_docker_agent_image="$(ufw-docker--resolve-agent-image "${ufw_docker_agent_image}")"
+        test -n "$ufw_docker_agent_image"
+    fi
+
     declare service_env
     if ! docker service inspect "$ufw_docker_agent" &>/dev/null; then
         err "Not found ufw-docker-agent service, creating ..."
@@ -301,6 +297,7 @@ function ufw-docker--service-delete() {
     declare service_name="$1"
     declare service_port="${2:-}"
     declare port proto
+
     if [[ "${service_port:-}" = */* ]]; then
         port="${service_port%/*}"
         proto="${service_port#*/}"
@@ -342,6 +339,11 @@ function ufw-docker--service-delete() {
 
     declare service_env
     service_env="ufw_public_${service_id}=$(IFS="${ENV_VALUE_SPLITTER}"; printf '%s' "${value_list[*]}")"
+
+    if [[ "${ufw_docker_agent_image}" = *-@(legacy|nf_tables) ]]; then
+        ufw_docker_agent_image="$(ufw-docker--resolve-agent-image "${ufw_docker_agent_image}")"
+        test -n "$ufw_docker_agent_image"
+    fi
 
     docker service update --update-parallelism=0 \
            --env-add ufw_docker_agent_image="${ufw_docker_agent_image}" \
@@ -1014,6 +1016,65 @@ function man-page() {
 
 function remove_blank_lines() {
     sed '/^[[:blank:]]*$/d'
+}
+
+function ufw-docker--host-uses-legacy-iptables() {
+    iptables --version | grep -F '(legacy)' &>/dev/null
+}
+
+function ufw-docker--probe-agent-image() {
+    local image="${1:?Missing agent image for probing}"
+    local output
+
+    if output="$(docker run --rm --network host --cap-add NET_ADMIN \
+                      "${image}" /bin/sh -c '/usr/sbin/iptables -t filter -S >/dev/null' 2>&1)"; then
+        ufw_docker_agent_image_probe_error=''
+        return 0
+    fi
+
+    output="${output//$'\r'/ }"
+    output="${output//$'\n'/ }"
+    output="${output//$'\t'/ }"
+    ufw_docker_agent_image_probe_error="${output:-unknown error}"
+    return 1
+}
+
+function ufw-docker--resolve-agent-image() {
+    local image="${1:?Missing agent image}"
+    local image_base
+    local nft_image
+    local legacy_image
+    local nft_probe_error=''
+    local legacy_probe_error=''
+
+    if [[ "${image}" != *-@(legacy|nf_tables) ]]; then
+        printf '%s\n' "${image}"
+        return 0
+    fi
+
+    image_base="${image%-*}"
+    nft_image="${image_base}-nf_tables"
+    legacy_image="${image_base}-legacy"
+
+    if ufw-docker--host-uses-legacy-iptables; then
+        printf '%s\n' "${legacy_image}"
+        return 0
+    fi
+
+    if ufw-docker--probe-agent-image "${nft_image}"; then
+        printf '%s\n' "${nft_image}"
+        return 0
+    fi
+    nft_probe_error="${ufw_docker_agent_image_probe_error}"
+
+    if ufw-docker--probe-agent-image "${legacy_image}"; then
+        err "WARN:" "Falling back to ${legacy_image} after nftables probe failed for ${nft_image}: ${nft_probe_error}"
+        printf '%s\n' "${legacy_image}"
+        return 0
+    fi
+    legacy_probe_error="${ufw_docker_agent_image_probe_error}"
+
+    die "Failed to find a compatible ufw-docker-agent image. nftables probe failed for ${nft_image}: ${nft_probe_error}; legacy probe failed for ${legacy_image}: ${legacy_probe_error}"
 }
 
 function err() {

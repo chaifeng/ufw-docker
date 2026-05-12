@@ -44,8 +44,6 @@ test-init-with-legacy-iptables() {
     @source <(@sed '/PATH=/d' "$working_dir/../ufw-docker") help
 }
 test-init-with-legacy-iptables-assert() {
-    iptables --version
-    test -n chaifeng/ufw-docker-agent:090502-legacy
     trap on-exit EXIT INT TERM QUIT ABRT ERR
     @dryrun cat
 }
@@ -56,8 +54,6 @@ test-init-with-nf-tables-iptables() {
     @source <(@sed '/PATH=/d' "$working_dir/../ufw-docker") help
 }
 test-init-with-nf-tables-iptables-assert() {
-    iptables --version
-    test -n chaifeng/ufw-docker-agent:090502-nf_tables
     trap on-exit EXIT INT TERM QUIT ABRT ERR
     @dryrun cat
 }
@@ -68,7 +64,6 @@ test-init-with-custom-agent-image() {
     @source <(@sed '/PATH=/d' "$working_dir/../ufw-docker") help
 }
 test-init-with-custom-agent-image-assert() {
-    test -n chaifeng/ufw-docker-agent:100917
     trap on-exit EXIT INT TERM QUIT ABRT ERR
     @dryrun cat
 }
@@ -1557,4 +1552,59 @@ test-install-no-changes() {
 }
 test-install-no-changes-assert() {
     @do-nothing
+}
+
+test-resolve-agent-image-with-fixed-tag() {
+    load-ufw-docker-function ufw-docker--resolve-agent-image
+    ufw-docker--resolve-agent-image chaifeng/ufw-docker-agent:100917
+}
+test-resolve-agent-image-with-fixed-tag-assert() {
+    @stdout chaifeng/ufw-docker-agent:100917
+}
+
+test-resolve-agent-image-host-uses-legacy() {
+    @mocktrue ufw-docker--host-uses-legacy-iptables
+
+    load-ufw-docker-function ufw-docker--resolve-agent-image
+    ufw-docker--resolve-agent-image chaifeng/ufw-docker-agent:251123-nf_tables
+}
+test-resolve-agent-image-host-uses-legacy-assert() {
+    @stdout chaifeng/ufw-docker-agent:251123-legacy
+}
+
+test-resolve-agent-image-nf-tables-probe-succeeds() {
+    @mockfalse ufw-docker--host-uses-legacy-iptables
+    @mocktrue ufw-docker--probe-agent-image chaifeng/ufw-docker-agent:251123-nf_tables
+
+    load-ufw-docker-function ufw-docker--resolve-agent-image
+    ufw-docker--resolve-agent-image chaifeng/ufw-docker-agent:251123-nf_tables
+}
+test-resolve-agent-image-nf-tables-probe-succeeds-assert() {
+    @stdout chaifeng/ufw-docker-agent:251123-nf_tables
+}
+
+test-resolve-agent-image-nf-tables-fails-legacy-fallback() {
+    @mockfalse ufw-docker--host-uses-legacy-iptables
+    @mockfalse ufw-docker--probe-agent-image chaifeng/ufw-docker-agent:251123-nf_tables
+    @mocktrue ufw-docker--probe-agent-image chaifeng/ufw-docker-agent:251123-legacy
+    ufw_docker_agent_image_probe_error='probe-error'
+
+    load-ufw-docker-function ufw-docker--resolve-agent-image
+    ufw-docker--resolve-agent-image chaifeng/ufw-docker-agent:251123-nf_tables
+}
+test-resolve-agent-image-nf-tables-fails-legacy-fallback-assert() {
+    @stdout chaifeng/ufw-docker-agent:251123-legacy
+}
+
+test-resolve-agent-image-both-probes-fail() {
+    @mockfalse ufw-docker--host-uses-legacy-iptables
+    @mockfalse ufw-docker--probe-agent-image chaifeng/ufw-docker-agent:251123-nf_tables
+    ufw_docker_agent_image_probe_error='probe-error'
+    @mockfalse ufw-docker--probe-agent-image chaifeng/ufw-docker-agent:251123-legacy
+
+    load-ufw-docker-function ufw-docker--resolve-agent-image
+    ufw-docker--resolve-agent-image chaifeng/ufw-docker-agent:251123-nf_tables
+}
+test-resolve-agent-image-both-probes-fail-assert() {
+    die "Failed to find a compatible ufw-docker-agent image. nftables probe failed for chaifeng/ufw-docker-agent:251123-nf_tables: probe-error; legacy probe failed for chaifeng/ufw-docker-agent:251123-legacy: probe-error"
 }

@@ -223,7 +223,7 @@ test-list-command-for-instance() {
     ufw-docker list httpd
 }
 test-list-command-for-instance-assert() {
-    ufw-docker--list httpd-container-name "" tcp ""
+    ufw-docker--list httpd-container-name "" "" ""
 }
 
 
@@ -232,7 +232,7 @@ test-allow-command-for-instance() {
     ufw-docker allow httpd
 }
 test-allow-command-for-instance-assert() {
-    ufw-docker--allow httpd-container-name "" tcp ""
+    ufw-docker--allow httpd-container-name "" "" ""
 }
 
 
@@ -276,7 +276,7 @@ test-delete-allow-command-for-instance() {
     ufw-docker delete allow httpd
 }
 test-delete-allow-command-for-instance-assert() {
-    ufw-docker--delete httpd-container-name "" tcp ""
+    ufw-docker--delete httpd-container-name "" "" ""
 }
 
 
@@ -1331,8 +1331,6 @@ test-reload-unexisting-rules-assert() {
     docker rm -f "1234567890ab"
 }
 
-# === Additional coverage: dispatch-level tests ===
-
 test-manpage-command() {
     @capture man -l -
     ufw-docker manpage
@@ -1363,6 +1361,38 @@ test-delete-allow-command-for-instance-with-port-and-network() {
 }
 test-delete-allow-command-for-instance-with-port-and-network-assert() {
     ufw-docker--delete httpd-container-name 80 tcp mynet
+}
+
+test-delete-allow-command-for-instance-with-port-only() {
+    @mock ufw-docker--instance-name httpd === @stdout httpd-container-name
+    ufw-docker delete allow httpd 80
+}
+test-delete-allow-command-for-instance-with-port-only-assert() {
+    ufw-docker--delete httpd-container-name 80 tcp ""
+}
+
+test-delete-allow-command-for-instance-with-port-only-and-network() {
+    @mock ufw-docker--instance-name httpd === @stdout httpd-container-name
+    ufw-docker delete allow httpd 80 mynet
+}
+test-delete-allow-command-for-instance-with-port-only-and-network-assert() {
+    ufw-docker--delete httpd-container-name 80 tcp mynet
+}
+
+test-allow-command-for-instance-with-port-only-and-network() {
+    @mock ufw-docker--instance-name httpd === @stdout httpd-container-name
+    ufw-docker allow httpd 80 mynet
+}
+test-allow-command-for-instance-with-port-only-and-network-assert() {
+    ufw-docker--allow httpd-container-name 80 tcp mynet
+}
+
+test-list-command-for-instance-with-port-only-and-network() {
+    @mock ufw-docker--instance-name httpd === @stdout httpd-container-name
+    ufw-docker list httpd 80 mynet
+}
+test-list-command-for-instance-with-port-only-and-network-assert() {
+    ufw-docker--list httpd-container-name 80 tcp mynet
 }
 
 test-list-command-for-instance-with-port() {
@@ -1403,7 +1433,6 @@ test-check-help-command-assert() {
     ufw-docker--install--help check
 }
 
-# === Additional coverage: function-level tests ===
 
 test-allow-internal-fails-for-no-published-ports() {
     load-ufw-docker-function ufw-docker--allow

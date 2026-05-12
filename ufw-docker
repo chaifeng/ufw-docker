@@ -1056,9 +1056,14 @@ case "$ufw_action" in
             die "invalid port syntax: \"$INSTANCE_PORT\"."
         fi
 
-        PROTO="$DEFAULT_PROTO"
-        if [[ "$INSTANCE_PORT" = */udp ]]; then
-            PROTO=udp
+        if [[ -n "$INSTANCE_PORT" ]]; then
+            if [[ "$INSTANCE_PORT" = */* ]]; then
+                PROTO="${INSTANCE_PORT#*/}"
+            else
+                PROTO="$DEFAULT_PROTO"
+            fi
+        else
+            PROTO=""
         fi
         shift || true
 

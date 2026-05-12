@@ -560,3 +560,12 @@ test-docker-entrypoint-updates-ufw-rules-with-deny-first-assert() {
     docker "${docker_opts[@]}" delete allow id333333 8080/tcp
     docker "${docker_opts[@]}" add-service-rule id333333 5353/udp
 }
+
+test-service-with-unknown-action() {
+    load-ufw-docker-function ufw-docker--service
+
+    ufw-docker--service unknown-action
+}
+test-service-with-unknown-action-assert() {
+    ufw-docker--help
+}

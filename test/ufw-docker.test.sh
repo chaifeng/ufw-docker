@@ -1330,3 +1330,202 @@ test-reload-unexisting-rules-assert() {
 
     docker rm -f "1234567890ab"
 }
+
+# === Additional coverage: dispatch-level tests ===
+
+test-manpage-command() {
+    @capture man -l -
+    ufw-docker manpage
+}
+test-manpage-command-assert() {
+    @assert-capture man -l - <<< "MAN PAGE FOR UFW-DOCKER"
+}
+
+test-allow-command-for-instance-with-port-proto-and-network() {
+    @mock ufw-docker--instance-name httpd === @stdout httpd-container-name
+    ufw-docker allow httpd 80/tcp default
+}
+test-allow-command-for-instance-with-port-proto-and-network-assert() {
+    ufw-docker--allow httpd-container-name 80 tcp default
+}
+
+test-delete-allow-command-for-instance-with-port() {
+    @mock ufw-docker--instance-name httpd === @stdout httpd-container-name
+    ufw-docker delete allow httpd 80/tcp
+}
+test-delete-allow-command-for-instance-with-port-assert() {
+    ufw-docker--delete httpd-container-name 80 tcp ""
+}
+
+test-delete-allow-command-for-instance-with-port-and-network() {
+    @mock ufw-docker--instance-name httpd === @stdout httpd-container-name
+    ufw-docker delete allow httpd 80/tcp mynet
+}
+test-delete-allow-command-for-instance-with-port-and-network-assert() {
+    ufw-docker--delete httpd-container-name 80 tcp mynet
+}
+
+test-list-command-for-instance-with-port() {
+    @mock ufw-docker--instance-name httpd === @stdout httpd-container-name
+    ufw-docker list httpd 80
+}
+test-list-command-for-instance-with-port-assert() {
+    ufw-docker--list httpd-container-name 80 tcp ""
+}
+
+test-list-command-for-instance-with-port-and-proto() {
+    @mock ufw-docker--instance-name httpd === @stdout httpd-container-name
+    ufw-docker list httpd 80/tcp
+}
+test-list-command-for-instance-with-port-and-proto-assert() {
+    ufw-docker--list httpd-container-name 80 tcp ""
+}
+
+test-list-command-for-instance-with-port-proto-and-network() {
+    @mock ufw-docker--instance-name httpd === @stdout httpd-container-name
+    ufw-docker list httpd 80/tcp mynet
+}
+test-list-command-for-instance-with-port-proto-and-network-assert() {
+    ufw-docker--list httpd-container-name 80 tcp mynet
+}
+
+test-install-help-command() {
+    ufw-docker install --help
+}
+test-install-help-command-assert() {
+    ufw-docker--install--help install
+}
+
+test-check-help-command() {
+    ufw-docker check --help
+}
+test-check-help-command-assert() {
+    ufw-docker--install--help check
+}
+
+# === Additional coverage: function-level tests ===
+
+test-allow-internal-fails-for-no-published-ports() {
+    load-ufw-docker-function ufw-docker--allow
+
+    @mocktrue docker inspect instance-name
+    @mock docker inspect --format '{{range $name, $net := .NetworkSettings.Networks}}{{if $net.IPAddress|len}}{{$name}} {{$net.IPAddress}}{{"\n"}}{{end}}{{if $net.GlobalIPv6Address|len}}{{$name}} {{$net.GlobalIPv6Address}}{{"\n"}}{{end}}{{end}}' instance-name === @stdout "default 172.18.0.3"
+    @mock docker inspect --format='{{range $p, $conf := .NetworkSettings.Ports}}{{with $conf}}{{$p}}{{"\n"}}{{end}}{{end}}' instance-name === @stdout ""
+
+    ufw-docker--allow instance-name "" tcp
+}
+test-allow-internal-fails-for-no-published-ports-assert() {
+    @do-nothing
+    @fail
+}
+
+test-allow-internal-fails-when-not-running() {
+    load-ufw-docker-function ufw-docker--allow
+
+    @mocktrue docker inspect instance-name
+    @mock docker inspect --format '{{range $name, $net := .NetworkSettings.Networks}}{{if $net.IPAddress|len}}{{$name}} {{$net.IPAddress}}{{"\n"}}{{end}}{{if $net.GlobalIPv6Address|len}}{{$name}} {{$net.GlobalIPv6Address}}{{"\n"}}{{end}}{{end}}' instance-name === @stdout ""
+    @mock docker inspect --format='{{range $p, $conf := .NetworkSettings.Ports}}{{with $conf}}{{$p}}{{"\n"}}{{end}}{{end}}' instance-name === @stdout 5000/tcp
+    @mockfalse die "Could not find a running instance \"instance-name\"."
+
+    ufw-docker--allow instance-name "" tcp
+}
+test-allow-internal-fails-when-not-running-assert() {
+    @do-nothing
+    @fail
+}
+
+test-allow-internal-succeeds-with-matching-network() {
+    setup-ufw-docker--allow
+
+    ufw-docker--allow instance-name 5000 tcp default
+}
+test-allow-internal-succeeds-with-matching-network-assert() {
+    ufw-docker--add-rule instance-name 172.18.0.3 5000 tcp default
+}
+
+test-allow-internal-fails-with-non-matching-network() {
+    setup-ufw-docker--allow
+
+    ufw-docker--allow instance-name 5000 tcp nonexistent-net
+}
+test-allow-internal-fails-with-non-matching-network-assert() {
+    @do-nothing
+    @fail
+}
+
+test-check-with-ip6tables() {
+    @mocktrue command -v ip6tables
+    @mock iptables -n -L DOCKER-USER
+    @mock ip6tables -n -L DOCKER-USER
+
+    load-ufw-docker-function ufw-docker--check
+
+    ufw-docker--check
+}
+test-check-with-ip6tables-assert() {
+    iptables -n -L DOCKER-USER
+    ufw-docker--check-install
+    ip6tables -n -L DOCKER-USER
+    ufw-docker--check-install_ipv6
+}
+
+test-check-install-ipv6-default() {
+    @mock mktemp === @stdout /tmp/after6_rules_tmp
+    @mock sed "/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d" /etc/ufw/after6.rules
+    @mock tee "/tmp/after6_rules_tmp"
+    @capture tee -a /tmp/after6_rules_tmp
+    @allow-real cat
+
+    load-ufw-docker-function ufw-docker--check-install_ipv6
+    ufw-docker--check-install_ipv6
+}
+test-check-install-ipv6-default-assert() {
+    rm-on-exit /tmp/after6_rules_tmp
+    sed "/^# BEGIN UFW AND DOCKER/,/^# END UFW AND DOCKER/d" /etc/ufw/after6.rules
+    @assert-capture tee -a /tmp/after6_rules_tmp <<\EOF
+# BEGIN UFW AND DOCKER
+*filter
+:ufw6-user-forward - [0:0]
+:ufw6-docker-logging-deny - [0:0]
+:DOCKER-USER - [0:0]
+-A DOCKER-USER -j ufw6-user-forward
+
+-A DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+-A DOCKER-USER -m conntrack --ctstate INVALID -j DROP
+-A DOCKER-USER -i docker0 -o docker0 -j ACCEPT
+
+-A DOCKER-USER -j RETURN -s fd00::/8
+-A DOCKER-USER -j ufw6-docker-logging-deny -m conntrack --ctstate NEW -d fd00::/8
+
+-A DOCKER-USER -j RETURN
+
+-A ufw6-docker-logging-deny -m limit --limit 3/min --limit-burst 10 -j LOG --log-prefix "[UFW DOCKER BLOCK] "
+-A ufw6-docker-logging-deny -j DROP
+
+COMMIT
+# END UFW AND DOCKER
+EOF
+    diff -u --color=auto /etc/ufw/after6.rules /tmp/after6_rules_tmp
+}
+
+test-check-install-ipv6-no-subnets() {
+    @mock ufw-docker--list-docker-subnets IPv6 === @stdout ""
+
+    load-ufw-docker-function ufw-docker--check-install_ipv6
+    ufw-docker--check-install_ipv6 --docker-subnets
+}
+test-check-install-ipv6-no-subnets-assert() {
+    @do-nothing
+}
+
+test-install-no-changes() {
+    @mocktrue ufw-docker--check-install
+    @mocktrue ufw-docker--check-install_ipv6
+
+    load-ufw-docker-function ufw-docker--install
+
+    ufw-docker--install
+}
+test-install-no-changes-assert() {
+    @do-nothing
+}
